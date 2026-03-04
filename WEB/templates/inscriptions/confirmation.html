@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block title %}Confirmation d'inscription{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h3 class="text-center mb-0">Inscription réussie !</h3>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        <i class="fas fa-check-circle text-success" style="font-size: 5rem;"></i>
+                    </div>
+                    
+                    <h4 class="text-center mb-4">Félicitations {{ eleve.prenom }} !</h4>
+                    
+                    <div class="alert alert-info">
+                        <p><strong>Votre matricule est :</strong> {{ eleve.matricule }}</p>
+                        <p><strong>Nom complet :</strong> {{ eleve.nom_complet }}</p>
+                        <p><strong>Classe :</strong> {{ eleve.get_classe_display }}</p>
+                        <p><strong>Statut :</strong> 
+                            <span class="badge bg-warning">{{ eleve.statut }}</span>
+                        </p>
+                    </div>
+                    
+                    <p class="text-center">
+                        Votre inscription est en attente de validation par la secrétaire.
+                        Vous serez notifié dès que votre dossier sera traité.
+                    </p>
+                    
+                    <div class="text-center mt-4">
+                        <a href="{% url 'inscriptions:inscription_form' %}" class="btn btn-primary">
+                            Nouvelle inscription
+                        </a>
+                        <a href="{% url 'inscriptions:liste_inscriptions' %}" class="btn btn-secondary">
+                            Voir les inscriptions
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

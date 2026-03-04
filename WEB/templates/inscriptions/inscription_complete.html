@@ -1,0 +1,162 @@
+<!-- templates/ -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Inscription Élève</title>
+    <style>
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .toast {
+            display: none;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            color: white;
+            z-index: 1000;
+        }
+        .toast.success {
+            background-color: #4CAF50;
+        }
+        .toast.error {
+            background-color: #f44336;
+        }
+        .loader {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 2s linear infinite;
+            z-index: 1001;
+        }
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Formulaire d'inscription complet</h1>
+        
+        <form id="form-inscription-complete" enctype="multipart/form-data">
+            {% csrf_token %}
+            
+            <h2>Informations personnelles</h2>
+            
+            <div class="form-group">
+                <label for="nom">Nom *</label>
+                <input type="text" id="nom" name="nom" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="prenom">Prénom *</label>
+                <input type="text" id="prenom" name="prenom" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="date_naissance">Date de naissance *</label>
+                <input type="date" id="date_naissance" name="date_naissance" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="classe">Classe *</label>
+                <select id="classe" name="classe" required>
+                    <option value="">Sélectionnez une classe</option>
+                    <option value="6EME">6ème</option>
+                    <option value="5EME">5ème</option>
+                    <option value="4EME">4ème</option>
+                    <option value="3EME">3ème</option>
+                    <option value="2nd">2nde</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="adresse">Adresse *</label>
+                <textarea id="adresse" name="adresse" rows="3" required></textarea>
+            </div>
+            
+            <h2>Documents requis (PDF ou DOCX uniquement, max 5MB)</h2>
+            
+            <div class="form-group">
+                <label for="acte_naissance">Acte de naissance *</label>
+                <input type="file" id="acte_naissance" name="acte_naissance" accept=".pdf,.docx" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="last_bulletin">Dernier bulletin *</label>
+                <input type="file" id="last_bulletin" name="last_bulletin" accept=".pdf,.docx" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="diplome">Diplôme *</label>
+                <input type="file" id="diplome" name="diplome" accept=".pdf,.docx" required>
+            </div>
+            
+            <button type="submit">S'inscrire</button>
+        </form>
+    </div>
+    
+    <!-- Overlay et loader -->
+    <div class="overlay" id="overlay"></div>
+    <div class="loader" id="loader"></div>
+    
+    <!-- Toasts pour les messages -->
+    <div class="toast success" id="success-toast">
+        <strong>Succès !</strong>
+        <div id="success-message"></div>
+    </div>
+    
+    <div class="toast error" id="error-toast">
+        <strong>Erreur !</strong>
+        <div id="error-message"></div>
+    </div>
+    
+    <script src="{% static 'js/inscription.js' %}"></script>
+</body>
+</html>
