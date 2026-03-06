@@ -21,6 +21,7 @@ FONT_TITLE   = ("Segoe UI", 18, "bold")
 FONT_HEADER  = ("Segoe UI", 12, "bold")
 FONT_NORMAL  = ("Segoe UI", 11)
 FONT_SMALL   = ("Segoe UI", 10)
+FONT_H1 =("goudy old style",35,"bold")
 
 SIDEBAR_BG        = PRIMARY_BLUE
 SIDEBAR_TEXT      = "#FFFFFF"

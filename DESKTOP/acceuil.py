@@ -1,5 +1,7 @@
 
 
+from tkinter import messagebox
+
 from customtkinter import *
 
 #importation des constant pour le style 
@@ -9,6 +11,7 @@ from utils.constant import *
 from PIL import Image,ImageTk
 import pathlib
 
+from data.db_manager import DbManager
 
 #recupron le chemin des images poru les charger 
 IMAGE_DIR =pathlib.Path(__file__).parent / "images"
@@ -20,7 +23,8 @@ class Acceuil(CTk):
         self.geometry(f"{self.winfo_screenwidth()}x{self.winfo_screenheight()}-1+0")
         self.title("Academix")
         self._set_appearance_mode("light")
-       
+        self.Database =DbManager()
+
 
         self.images ={}
 
@@ -31,21 +35,21 @@ class Acceuil(CTk):
         header.pack_propagate(False)
 
         #icone de Academix
-        self.images['logo'] =CTkImage(Image.open(IMAGE_DIR / "logo.png"),size=(75,75))
+        self.images['logo'] =CTkImage(Image.open(IMAGE_DIR / "logo.png"),size=(50,50  ))
         logoLabel =CTkLabel(header,image =self.images['logo'],text="")
         logoLabel.pack(side =LEFT,padx =20)
+        
 
         #ICON DE NOTIFICATIONS
         self.images['notification_icon'] =CTkImage(Image.open(IMAGE_DIR / "notification.png"),size=(50,50))
-        self.notificationLabel =CTkLabel(header,image =self.images['notification_icon'],text="0",fg_color=PRIMARY_BLUE,text_color="red")
+        self.notificationLabel =CTkButton(header,image =self.images['notification_icon'],text="0",font=("goudy old style",30,"bold"),fg_color=PRIMARY_BLUE,text_color="red")
         self.notificationLabel.pack(side =RIGHT,padx =20)
+        self.showNotifications()
 
 
 
         # Fonction utilitaire pour créer une ligne label + entry def add_row(parent, label_text): row = tk.Frame(parent) row.pack(fill="x", pady=5) lbl = tk.Label(row, text=label_text, width=15, anchor="w") lbl.pack(side="left") entry = tk.Entry(row) entry.pack(side="left", fill="x", expand=True) return entry # Création des lignes matricule_entry = add_row(main_frame, "Matricule") nom_entry = add_row(main_frame, "Nom") prenom_entry = add_row(main_frame, "Prénom") date_entry = add_row(main_frame, "Date naissance")
 
-
-            
         
 
         sidebar =CTkFrame(self,fg_color=SIDEBAR_BG,width=SIDEBAR_WIDTH,border_width=0)
@@ -60,16 +64,12 @@ class Acceuil(CTk):
         self.mainFrame.pack(fill =BOTH,side =LEFT,expand =True)
 
 
-
-        self.images['eleve'] =CTkImage(Image.open(IMAGE_DIR / "eleve.png"),size=(ICON_SIZE,ICON_SIZE))
-
-
         #btn_config 
         BTN ={
             1:{
                 'text':"Gestion Des Eleves",
                 'command':lambda:self.show_eleve_view(),
-                'image':self.images['eleve']
+                'image':''
             },
             2:{
                 "text":"Gestion COURS",
@@ -80,14 +80,8 @@ class Acceuil(CTk):
        
 
         for key,value in BTN.items():
-           btn =CTkButton(sidebar,text=value['text'],font=FONT_TITLE,
-                          fg_color=SIDEBAR_BG,text_color=SIDEBAR_TEXT,
-                          command=value['command'],
-                          hover_color=SIDEBAR_HOVER,border_width=5,
-                          image=value['image'],compound=LEFT)
+           btn =CTkButton(sidebar,text=value['text'],font=FONT_TITLE,fg_color=SIDEBAR_BG,text_color=SIDEBAR_TEXT,command=value['command'],hover_color=SIDEBAR_HOVER,border_width=5)
            btn.pack(fill=X,pady=5,padx=10,)
-
-        
 
     def show_eleve_view(self):
         from views.eleves import EleveView
@@ -96,6 +90,18 @@ class Acceuil(CTk):
             widget.destroy()
         eleve_view =EleveView(self.mainFrame)
         eleve_view.pack(fill=BOTH,expand=True)
+
+    def showNotifications(self):
+        # try:
+            if self.Database.connection:
+                data =self.Database.refresh_pending_list()
+                if len(data) > 0:
+                    self.notificationLabel.configure(text =f"{len(data)}")
+                else:
+                    pass
+    
+        # except Exception as e :
+        #     messagebox.showerror("Erreur",f"Erreur de :{e}")
 
 
 
