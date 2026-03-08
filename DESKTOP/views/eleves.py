@@ -1,7 +1,7 @@
 
-from email import message
 import pathlib
-import pprint
+
+from re import I
 from tkinter import messagebox, ttk
 
 from customtkinter import *
@@ -9,7 +9,8 @@ from customtkinter import *
 
 from utils.constant import * 
 
-from data.db_manager import DbManager, getConnection
+from data.db_manager import DbManager
+from .documentView import DocView
 
 INSCRIPTION_DIR =pathlib.Path(__file__).parent.parent.parent / "WEB" / "media" 
 
@@ -36,6 +37,7 @@ class EleveView(CTkFrame):
         self.classe_var =StringVar()
         self.search_var =StringVar()
         self.imagePath =StringVar()
+        self.typesearch_var =StringVar()
 
         #document de l'eleve
         self.acteNaissance =None
@@ -63,9 +65,23 @@ class EleveView(CTkFrame):
         frameSearch.pack(fill =X,side =TOP)
 
         #label et entry pour les info de l'eleve   
-        self.searchEntry =CTkEntry(frameSearch,placeholder_text="Rechercher par matricule",font=FONT_LABEL,fg_color=BACKGROUND_LIGHT,border_width=2,text_color=PRIMARY_BLUE,border_color=PRIMARY_BLUE)
-        self.searchEntry.pack(side =LEFT,anchor =N,expand =True,pady=10)
-        self.btnSerch =CTkButton(frameSearch,text ="Rechercher",font=FONT_LABEL,fg_color=PRIMARY_BLUE,hover_color=SECONDARY_BLUE,border_width=0)
+        self.combo =CTkComboBox(frameSearch,width=140,corner_radius=10,border_width=5,
+    
+                                button_hover_color=PRIMARY_BLUE,values=['matricule','nom','prenom'],
+                                border_color=PRIMARY_BLUE,text_color=BACKGROUND_LIGHT)
+        self.combo.pack(side= LEFT,anchor =N,pady =10,)
+
+        self.searchEntry =CTkEntry(frameSearch,placeholder_text="Rechercher ",font=FONT_LABEL,fg_color=BACKGROUND_LIGHT,
+                                   border_width=2,
+                                   text_color=PRIMARY_BLUE,
+                                   border_color=PRIMARY_BLUE,
+                                   textvariable=self.search_var)
+        
+        self.searchEntry.pack(side =LEFT,anchor =N,expand =True,pady=10,padx =10)
+
+        self.btnSerch =CTkButton(frameSearch,text ="Rechercher",font=FONT_LABEL,fg_color=PRIMARY_BLUE,
+                                 hover_color=SECONDARY_BLUE,border_width=0,text_color=BACKGROUND_LIGHT
+                                 ,command=self.Search)
         self.btnSerch.pack(side =LEFT,anchor =N,padx =20,pady =10)
 
 
@@ -236,7 +252,8 @@ class EleveView(CTkFrame):
         style.map("Treeview", background=[("selected", "skyblue")], foreground=[("selected", "black")])
 
 
-        self.TableListe =ttk.Treeview(tableFrame,columns=("Matricule","Nom","Prenom","Date Naissance","Addresse","Classe"),show="headings")
+        self.TableListe =ttk.Treeview(tableFrame,columns=("id","Matricule","Nom","Prenom","Date Naissance","Addresse","Classe"),show="headings")
+        self.TableListe.heading("id",text='')
         self.TableListe.heading("Matricule",text='Matricule')
         self.TableListe.heading("Nom",text='Nom')
         self.TableListe.heading("Prenom",text='Prenom')
@@ -244,6 +261,7 @@ class EleveView(CTkFrame):
         self.TableListe.heading("Addresse",text='Addresse')
         self.TableListe.heading("Classe",text='Classe')
 
+        self.TableListe.column("id",width=0)
         self.TableListe.column("Matricule",width=80)
         self.TableListe.column("Nom",width=100)
         self.TableListe.column("Prenom",width=100)
@@ -272,9 +290,11 @@ class EleveView(CTkFrame):
     
     def GetEleves(self):
         if self.Database.connection:
-            data =self.Database.refresh_pending_list()
+            datas =self.Database.refresh_pending_list()
             self.TableListe.delete(*self.TableListe.get_children())
-            for row in data:
+          
+            for row in datas:
+
                 self.TableListe.insert("",END,values  =row)
     
     
@@ -292,6 +312,9 @@ class EleveView(CTkFrame):
         self.classe_var.set(values[6])
         self.imagePath.set(values[7])
         self.showImage(self.imagePath.get())
+
+
+
     
     
 
@@ -319,20 +342,40 @@ class EleveView(CTkFrame):
         """Fonction d'appelle pour accepter l'inscription
         """
         if self.Database.connection:
-            self.Database.AcceptedInscription(self.matricule_var.get())
+            self.Database.AcceptedInscription(self.matricule_var.get(),self.id_var.get())
             self.GetEleves()
-            self.clear()    
+            self.clear() 
+    
 
+    def Search(self):
+        """Fonction qui va faire la recherche dans la base de donner
+        """
+        if self.Database.connection:
+            data =self.Database.SearchEleveInscription(self.combo.get(),self.search_var.get())
+            print(data)
+            if data:
+                self.TableListe.delete(*self.TableListe.get_children()) #j'efface la table liste 
+                self.clear() #j'efface tous les entry
+                for row in data:
+                    self.TableListe.insert("",END,values =row)
 
+           
     def GetEleveDocument(self):
         """Fonction qui va afficher les differents Documents de l'eleve lors de l'inscription
 
         Args:
+        Return
+            Retourne un liste vers le lien de chaque document
+
               """
         if self.Database.connection:
             documents =self.Database.GetDocuments(self.id_var.get())
             if documents:
-                return documents
+                    
+                self.docBulletin =documents[2]
+                self.docDiplome =documents[1]
+                self.docActeNaissance =documents[0]
+                print(self.docActeNaissance,self.docBulletin,self.docDiplome)
             
             else:
                 messagebox.showinfo("Documents",f"Aucun document trouvé pour cet eleve")
@@ -340,11 +383,11 @@ class EleveView(CTkFrame):
     def ShowEleveDocument(self):
         """Fonction qui va se charger d'afficher les documents dans une fenetre separer
         La solution : PyMuPDF (fitz) + PIL (Pillow)
-Pour que cela fonctionne, vous aurez besoin de deux bibliothèques :
+        Pour que cela fonctionne, vous aurez besoin de deux bibliothèques :
 
-PyMuPDF (fitz) : Pour lire le PDF et transformer les pages en images.
+        PyMuPDF (fitz) : Pour lire le PDF et transformer les pages en images.
 
-Pillow (PIL) : Pour manipuler l'image et la rendre compatible avec Tkinter.
+        Pillow (PIL) : Pour manipuler l'image et la rendre compatible avec Tkinter.
 
         """
         documents =self.GetEleveDocument()
@@ -355,6 +398,7 @@ Pillow (PIL) : Pour manipuler l'image et la rendre compatible avec Tkinter.
         docWindow.resizable(False,False) #ne doit pas etre redimentsionner
 
 
+
         #creation des composants 
 
         #tabs
@@ -362,34 +406,32 @@ Pillow (PIL) : Pour manipuler l'image et la rendre compatible avec Tkinter.
         tabframe.pack(fill =X,side =TOP)
         tabframe.pack_propagate(False)
 
-        self.Tabview=CTkTabview(tabframe,fg_color =BACKGROUND_LIGHT,bg_color =PRIMARY_BLUE,text_color =BACKGROUND_LIGHT)
-        self.Tabview.pack(fill =BOTH,side =TOP)
+        self.Tabview=CTkTabview(docWindow,fg_color ="black",bg_color =PRIMARY_BLUE,text_color =BACKGROUND_LIGHT)
+        self.Tabview.place(x =0,y=0,relwidth=1,relheight=0.9)
         self.Tabview.add("Acte de Naissance")
         self.Tabview.add("Diplome")
         self.Tabview.add("Dernier Bulletin")
 
-        self.labelActe=CTkLabel(self.Tabview.tab("Acte de Naissance"),fg_color='red',text ="acte naissance non Disponible",font =FONT_H1,text_color =BACKGROUND_LIGHT)
-        self.labelActe.pack(fill =BOTH,expand =True)
+        if self.docActeNaissance:
+            actenaissance_img =DocView(documentpath =INSCRIPTION_DIR / self.docActeNaissance)
+            self.labelActe=CTkLabel(self.Tabview.tab("Acte de Naissance"),text= "",image=actenaissance_img,width =596,height =842,fg_color ="red")
+            self.labelActe.pack(fill ="both",pady =20,padx =10,expand =True)
+            
+        if self.docDiplome:
 
-        self.labelDiplome=CTkLabel(self.Tabview.tab("Diplome"),fg_color="green",text ="Diplome Non disponible",font =FONT_H1,text_color =BACKGROUND_LIGHT)
-        self.labelDiplome.pack(fill =BOTH,expand =True)
-
-        self.last_bulletin=CTkLabel(self.Tabview.tab("Dernier Bulletin"),fg_color="gold",text ="Bulletin Non disponible",font =FONT_H1,text_color =BACKGROUND_LIGHT)
-        self.last_bulletin.pack(fill =BOTH,expand =True)
-
-
-        #suite a faire recuperer les document sous forme d'image et les images dans chaque label corresponds 
-        
-
-
-
-
-
-
-
+            diplome_img= DocView(documentpath =INSCRIPTION_DIR / self.docDiplome) #le diplome convertit en image
+            self.labelDiplome=CTkLabel(self.Tabview.tab("Diplome"),image =diplome_img,fg_color="green",font =FONT_H1)
+            self.labelDiplome.pack(fill =BOTH,expand =True)
+            
+        if self.docBulletin:
+            bulletin_img =DocView(documentpath =INSCRIPTION_DIR / self.docBulletin) #le bulletin converti en image
+            self.last_bulletin=CTkLabel(self.Tabview.tab("Dernier Bulletin"),image=bulletin_img,fg_color="gold",font =FONT_H1)
+            self.last_bulletin.pack(fill =BOTH,expand =True)
+            
 
         docWindow.grab_set() #empeche l'interaction avec la fenetre principale tant quel reste ouverte
         docWindow.mainloop()
+
 
 
         

@@ -96,8 +96,7 @@ class Eleve(models.Model):
         date_inscription = self.date_inscription
         year = date_inscription.year
         month = date_inscription.month
-        day = date_inscription.day
-        last_two_digits_id = str(self.id).replace("-","")[-2:]
+        last_two_digits_id = str(self.id).replace("-","")[-3:]
 
         return f"{year}BT{last_two_digits_id}{month:02d}"
     

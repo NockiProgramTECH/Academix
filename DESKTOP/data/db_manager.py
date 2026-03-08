@@ -6,10 +6,18 @@ import mysql.connector
 
 import sqlite3
 
+DB_CONFIG={
+        'host':"localhost",
+        'user':'root',
+        "port":3306,
+        'database':'Academix',
+        'password':'root'
+}
 #pour sqlite3
 def getConnection():
     db =sqlite3.connect(r"WEB\db.sqlite3")
     if db:
+
         return db
     return None
 
@@ -38,16 +46,19 @@ class DbManager:
         except Exception as e:
             messagebox.showerror("Errreur",f"Erreur de {e}")
 
-    def AcceptedInscription(self,matricule:str):
+    def AcceptedInscription(self,matricule:str,id:str):
         """Foncction qui sera apeler pour accepter l'inscription d'un eleve
         Args:
             matricule (str): Le numero matricule donner lors de l'inscription
+            id (str): l'identifiant
         
         """
         try:
             cursor = self.connection.cursor()
             cursor.execute("UPDATE Inscriptions_eleve SET statut ='ACCEPTE' WHERE matricule = ?",(matricule,))
             self.connection.commit()
+            #valider aussi les documents
+            cursor.execute("UPDATE Inscriptions_documenteleve SET est_valide = TRUE WHERE id = ?",{id})
             messagebox.showinfo("Succès",f"Inscription de l'eleve {matricule} a été accepté")
         except Exception as e:
             messagebox.showerror("Errreur",f"Erreur de {e}")
@@ -70,5 +81,27 @@ class DbManager:
                  return None
         except Exception as e :
               messagebox.showerror("Erreur",f"Erreur lors de l'obtention du fichier : {e}")
-            
 
+    
+    def SearchEleveInscription(self,VarSeaerch:str,variable:str):
+        """Fonction qui va faire la recherche dans la plage entry
+
+        Args:
+            Varsearch (str): valeur  type a rechercher dans la table           
+            variable (str): valeur entrer dans pour la recherche
+        
+        Return:
+            retourne liste de valeur quelle a trouver ou rien 
+        """
+        try:
+            querie =f"SELECT id,matricule,nom,prenom,date_naissance,adresse,classe,photo from Inscriptions_eleve WHERE {str(VarSeaerch)}  LIKE '{str(variable)}%' AND statut ='EN_ATTENTE'"
+            print(querie)
+            if self.connection:
+                    cursor =self.connection.cursor()
+                    cursor.execute(querie )
+                    row =cursor.fetchall()
+                    return row if row else None
+        
+        except Exception as e:
+            messagebox.showerror("Erreur",f"Erreur de connection a la base de donner: {e}")
+    

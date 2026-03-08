@@ -12,10 +12,11 @@ from PIL import Image,ImageTk
 import pathlib
 
 from data.db_manager import DbManager
-
 #recupron le chemin des images poru les charger 
 IMAGE_DIR =pathlib.Path(__file__).parent / "images"
+
 print(IMAGE_DIR)
+
 
 class Acceuil(CTk):
     def __init__(self):
@@ -72,7 +73,7 @@ class Acceuil(CTk):
                 'image':''
             },
             2:{
-                "text":"Gestion COURS",
+                "text":"Affectation Par Classe",
                 "command":lambda:print("Gestion cours") ,
                 "image":''
             }
@@ -92,7 +93,9 @@ class Acceuil(CTk):
         eleve_view.pack(fill=BOTH,expand=True)
 
     def showNotifications(self):
-        # try:
+        """fonction pour afficher le nombre de notifications
+        """
+        try:
             if self.Database.connection:
                 data =self.Database.refresh_pending_list()
                 if len(data) > 0:
@@ -100,8 +103,8 @@ class Acceuil(CTk):
                 else:
                     pass
     
-        # except Exception as e :
-        #     messagebox.showerror("Erreur",f"Erreur de :{e}")
+        except Exception as e :
+            messagebox.showerror("Erreur",f"Erreur de :{e}")
 
 
 
