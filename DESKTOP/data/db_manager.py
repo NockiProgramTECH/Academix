@@ -1,5 +1,6 @@
 from ast import Return
 from email import message
+import time
 from tkinter import messagebox
 
 import mysql.connector 
@@ -203,15 +204,9 @@ class DbManager:
                  return None
         except Exception as e :
               messagebox.showerror("Erreur",f"Erreur lors de l'obtention du fichier : {e}")
-
-    
-
-
-
-
     
     
-    def affecter_individuel(self, classe_cible,selected_items,func):
+    def affectation_individuel(self, classe_cible,selected_items,func):
         id_eleve = selected_items[0] # L'ID de l'élève
         print("repartir unique",id_eleve)
         try:
@@ -242,3 +237,74 @@ class DbManager:
             
         except Exception as e:
             messagebox.showerror("Erreur", f"Impossible d'affecter l'élève : {e}")
+    
+
+
+    
+    def affectation_global(self,niveau:str,nb:int):
+        """
+        Exécute la répartition automatique des élèves et synchronise avec la base de données.
+
+        Cette méthode répartit les élèves acceptés non encore affectés dans des classes
+        de A à Z selon le nombre de classes spécifié. Elle crée les classes si elles
+        n'existent pas, affecte les élèves et met à jour les informations.
+
+        Le processus suit un algorithme round-robin pour distribuer équitablement
+        les élèves dans les classes.
+
+        Raises:
+            ValueError: Si le nombre de classes n'est pas un entier valide
+        """
+        """Algorithme combiné : Répartit A->Z et crée les liens officiels"""
+        try:
+           
+            # Génère les lettres de classe selon le nombre spécifié (A, B, C, etc.)
+            lettres = ["A", "B", "C", "D", "E", "F"][:nb]
+            annee = f"{int(time.strftime('%Y') ) -1 }-{(time.strftime('%Y'))}"  # Exemple : "2024-2025"
+
+            cursor = self.connection.cursor()
+
+                # 1. Sélection des élèves validés non encore affectés officiellement
+            cursor.execute("""
+                    SELECT id, nom, prenom FROM Inscriptions_eleve 
+                    WHERE statut = 'ACCEPTED' 
+                    AND classe = %s
+                    AND id NOT IN (SELECT eleve_id FROM Scolarite_Affectation)
+                    ORDER BY nom ASC, prenom ASC
+                """, (niveau,))
+                
+            eleves = cursor.fetchall()
+            if not eleves:
+                messagebox.showinfo("Info", "Tous les élèves sont déjà affectés !")
+                return
+
+            count = 0
+            for id_eleve, nom, prenom in eleves:
+                    # Calcul de la classe (Round-robin) - distribution équilibrée
+                lettre = lettres[count % nb]
+                nom_classe = f"{niveau} {lettre}"
+
+                    # 2. On s'assure que la classe existe dans 'Classes'
+                cursor.execute("INSERT IGNORE  INTO Classes (nom_classe) VALUES (%s) ", (nom_classe,))
+                cursor.execute("SELECT id FROM Classes WHERE nom_classe = %s", (nom_classe,))
+                id_classe = cursor.fetchone()[0]
+
+                    # 3. On crée l'affectation officielle
+                cursor.execute("""
+                        INSERT INTO Scolarite_Affectation (eleve_id, classe_id, annee_scolaire)
+                        VALUES (%s, %s, %s)
+                    """, (id_eleve, id_classe, annee))
+                    
+                    # 4. On met à jour le champ informatif dans la table inscription
+                cursor.execute("UPDATE Inscriptions_eleve SET classe_reelle = %s WHERE id = %s", (nom_classe, id_eleve))
+                    
+                count += 1
+
+            self.connection.commit()
+            print(f"Répartition terminée : {count} élèves affectés officiellement.")
+            # func() #appelle de la fonction
+            messagebox.showinfo("Succès", f"Répartition terminée : {count} élèves affectés officiellement.")
+        except Exception as e:
+            messagebox.showerror("Erreur",f"Erreur de connection a la base de donner: {e}")
+            
+

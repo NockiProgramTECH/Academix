@@ -166,7 +166,7 @@ class Repartitions(CTkFrame):
             fg_color=SECONDARY_BLUE,
             text_color=BACKGROUND_LIGHT,
             hover_color=PRIMARY_BLUE,
-            command=self.executer_repartition_et_synchronisation,
+            command=self.repartitionGlobal,
             height=35
         )
         self.btn_affectation_multiple.pack(side=LEFT, padx=(0, 10))
@@ -524,75 +524,26 @@ class Repartitions(CTkFrame):
             # Affiche un message d'erreur en cas de problème
             messagebox.showerror("Erreur",f"Erreur de connection {e}")
     
-    def executer_repartition_et_synchronisation(self):
+
+
+
+    def repartitionGlobal(self):
         """
-        Exécute la répartition automatique des élèves et synchronise avec la base de données.
+        Effectuer la repartition global sur la liste des touts les eleves en fonction de la classe souhaiter 
 
-        Cette méthode répartit les élèves acceptés non encore affectés dans des classes
-        de A à Z selon le nombre de classes spécifié. Elle crée les classes si elles
-        n'existent pas, affecte les élèves et met à jour les informations.
-
-        Le processus suit un algorithme round-robin pour distribuer équitablement
-        les élèves dans les classes.
-
-        Raises:
-            ValueError: Si le nombre de classes n'est pas un entier valide
         """
-        """Algorithme combiné : Répartit A->Z et crée les liens officiels"""
-        # try:
-        # Récupère le niveau scolaire sélectionné et le convertit en majuscules
         niveau = self.niveau_var.get().upper()
-        # Récupère le nombre de classes à créer
         nb = int(self.nnbrClasse.get())
-        # Génère les lettres de classe selon le nombre spécifié (A, B, C, etc.)
-        lettres = ["A", "B", "C", "D", "E", "F"][:nb]
-        annee = "2025-2026"
-            
-        cursor = self.Database.connection.cursor()
+        try:
+            if self.Database.connection:
+                self.Database.affectation_global(niveau=niveau,nb =nb)
+                messagebox.showinfo("Succès", f"Répartition globale effectuée pour le niveau {niveau} avec {nb} classes créées.")
+                self.getAccepted()  # Rafraîchir la liste des élèves acceptés
+                self.reinitialiser_champs()  # Réinitialiser les champs du formulaire
+                self.classReelCombox.configure(values=self.Database.getClasseReel())  # Rafraîchir la liste des classes réelles dans le combobox
 
-            # 1. Sélection des élèves validés non encore affectés officiellement
-        cursor.execute("""
-                SELECT id, nom, prenom FROM Inscriptions_eleve 
-                WHERE statut = 'ACCEPTED' 
-                AND classe = %s
-                AND id NOT IN (SELECT eleve_id FROM Scolarite_Affectation)
-                ORDER BY nom ASC, prenom ASC
-            """, (niveau,))
-            
-        eleves = cursor.fetchall()
-        if not eleves:
-            messagebox.showinfo("Info", "Tous les élèves sont déjà affectés !")
-            return
-
-        count = 0
-        for id_eleve, nom, prenom in eleves:
-                # Calcul de la classe (Round-robin) - distribution équilibrée
-            lettre = lettres[count % nb]
-            nom_classe = f"{niveau} {lettre}"
-
-                # 2. On s'assure que la classe existe dans 'Classes'
-            cursor.execute("INSERT  INTO Classes (nom_classe) VALUES (%s) ", (nom_classe,))
-            cursor.execute("SELECT id FROM Classes WHERE nom_classe = %s", (nom_classe,))
-            id_classe = cursor.fetchone()[0]
-
-                # 3. On crée l'affectation officielle
-            cursor.execute("""
-                    INSERT INTO Scolarite_Affectation (eleve_id, classe_id, annee_scolaire)
-                    VALUES (%s, %s, %s)
-                """, (id_eleve, id_classe, annee))
-                
-                # 4. On met à jour le champ informatif dans la table inscription
-            cursor.execute("UPDATE Inscriptions_eleve SET classe_reelle = %s WHERE id = %s", (nom_classe, id_eleve))
-                
-            count += 1
-
-        self.Database.connection.commit()
-        self.getAccepted()
-        messagebox.showinfo("Succès", f"Répartition terminée : {count} élèves affectés officiellement.")
-
-    # except Exception as e:
-    #     print(e)
-    #     messagebox.showerror("Erreur", f"Détails : {e}")
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors de la répartition globale : {e}")
 
     
     def getDonnerAccepted(self,ev):
@@ -751,11 +702,8 @@ class Repartitions(CTkFrame):
                 nom_classe = f"{niveau} {lettre}"
                 self.menu_treeL.add_command(
                     label=f"Affecter en {nom_classe}", 
-                    command=lambda c=nom_classe: self.Database.affecter_individuel(c, self.selected_item,self.getAccepted))
+                    command=lambda c=nom_classe: self.Database.affectation_individuel(c, self.selected_item,self.getAccepted))
                 #si sa reussi on doit rafraichir la table des élèves acceptés et la table des classes réelles
-
-           
-               
             
             # Afficher le menu là où se trouve la souris
             self.menu_treeL.post(event.x_root, event.y_root)
