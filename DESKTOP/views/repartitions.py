@@ -1,3 +1,11 @@
+"""
+Module pour la gestion des répartitions d'élèves dans l'application desktop de gestion scolaire.
+
+Ce module contient la classe Repartitions qui fournit une interface graphique
+pour affecter les élèves acceptés à des classes réelles, effectuer des répartitions
+automatiques et gérer les listes d'élèves par classe.
+"""
+
 from posixpath import expanduser
 
 from customtkinter import *
@@ -8,7 +16,38 @@ from tkinter import Menu, messagebox, ttk
 
 
 class Repartitions(CTkFrame):
+    """
+    Classe principale pour l'interface de répartition des élèves.
+
+    Cette classe hérite de CTkFrame et fournit une interface utilisateur pour :
+    - Afficher la liste des élèves acceptés
+    - Effectuer des affectations individuelles ou multiples
+    - Répartir automatiquement les élèves dans des classes
+    - Afficher les élèves par classe réelle
+
+    Attributes:
+        master: Le widget parent (fenêtre principale)
+        Database: Instance du gestionnaire de base de données
+        menu_tree: Menu contextuel pour les actions sur les élèves
+        niveau_var: Variable pour le niveau scolaire sélectionné
+        search_var: Variable pour la recherche
+        typesearch_var: Variable pour le type de recherche
+        nnbrClasse: Nombre de classes à créer
+        id_var, matricule_var, etc.: Variables pour les champs de formulaire
+        TableListe: Treeview pour la liste des élèves acceptés
+        TableListeClasse: Treeview pour les élèves par classe
+        classReelCombox: Combobox pour sélectionner la classe réelle
+    """
+
     def __init__(self,master,*args,**kwargs):
+        """
+        Initialise l'interface de répartition.
+
+        Args:
+            master: Le widget parent
+            *args: Arguments supplémentaires pour CTkFrame
+            **kwargs: Arguments nommés supplémentaires pour CTkFrame
+        """
         super().__init__(master,*args,**kwargs)
         self.master =master
         self.Database =DbManager()
@@ -17,33 +56,48 @@ class Repartitions(CTkFrame):
 
 
         ##########################################################
-        self.menu_tree = Menu(self, tearoff=0)
+        self.menu_treeC = Menu(self, tearoff=0)
 
-        self.menu_tree.add_command(label="Voir détails", command="")
-        self.menu_tree.add_command(label="Modifier", command="")
-        self.menu_tree.add_command(label="Supprimer", command="")
+        self.menu_treeC.add_command(label="Voir détails", command="")
+        self.menu_treeC.add_command(label="Modifier", command="")
+        self.menu_treeC.add_command(label="Supprimer", command="")
+
+        self.menu_treeL = Menu(self, tearoff=0)
+         
+        # Création du menu (il est caché par défaut)
+        # self.context_menu = Menu(self, tearoff=0, bg="#2b2b2b", fg="white", font=("Arial", 10))
+
+        # On le remplira dynamiquement selon l'élève
+      # Si tu préfères vraiment le clic gauche, utilise <Button-1>, 
+        # mais attention cela peut gêner la sélection simple.
+
+        # self.menu_treeL.add_command(label="Voir détails", command="")
+        # self.menu_treeL.add_command(label="Modifier", command="")
+        # self.menu_treeL.add_command(label="Supprimer", command="")
 
 
 
-        #frame1 pour voir tous la liste des elevs accpeter 
-        #frame 2 bouton pour lancer la repartition et la synchronisation
-        #frame 3:combox et treeview pour afficher la liste des eleves par classe selection par le combobox et button afficher la classe 
+        # Structure des frames :
+        # - Frame gauche (haut) : Formulaire d'affectation et boutons
+        # - Frame droite (haut) : Liste des élèves acceptés
+        # - Frame bas : Liste des élèves par classe réelle
 
 
-        #les variables
-        self.niveau_var =StringVar()
-        self.search_var =StringVar()
-        self.typesearch_var =StringVar()
-        self.nnbrClasse =IntVar()
+        # Initialisation des variables Tkinter pour les champs de formulaire
+        self.niveau_var = StringVar()  # Niveau scolaire sélectionné (6eme, 5eme, etc.)
+        self.search_var = StringVar()  # Terme de recherche
+        self.typesearch_var = StringVar()  # Type de recherche
+        self.nnbrClasse = IntVar()  # Nombre de classes à créer lors de la répartition
 
-        self.id_var =StringVar()
-        self.matricule_var =StringVar()
-        self.nom_var =StringVar()
-        self.prenom_var =StringVar()
-        self.date_naissance_var =StringVar()
-        self.addresse_var =StringVar()
-        self.classe_var =StringVar()
-        self.classrel_var =StringVar()
+        # Variables pour stocker les informations de l'élève sélectionné
+        self.id_var = StringVar()  # ID unique de l'élève
+        self.matricule_var = StringVar()  # Matricule de l'élève
+        self.nom_var = StringVar()  # Nom de l'élève
+        self.prenom_var = StringVar()  # Prénom de l'élève
+        self.date_naissance_var = StringVar()  # Date de naissance
+        self.addresse_var = StringVar()  # Adresse de l'élève
+        self.classe_var = StringVar()  # Classe actuelle
+        self.classrel_var = StringVar()  # Classe réelle affectée
     
 
         #partager les frame en 3  deux frame a gauche et un frame a droite et un autre en bas pour la liste des elevs par classe
@@ -268,19 +322,6 @@ class Repartitions(CTkFrame):
         buttons_frame.grid_columnconfigure(0, weight=1)
         buttons_frame.grid_columnconfigure(1, weight=1)
 
-        self.btn_affecter_unique = CTkButton(
-            buttons_frame,
-            text="Affectation Unique",
-            font=FONT_NORMAL,
-            fg_color=PRIMARY_BLUE,
-            text_color=BACKGROUND_LIGHT,
-            hover_color=SECONDARY_BLUE,
-            command=self.affectation_unique,
-            height=40,
-            corner_radius=8
-        )
-        self.btn_affecter_unique.grid(row=0, column=0, padx=5, pady=5, sticky=EW)
-
         self.btn_reinitialiser = CTkButton(
             buttons_frame,
             text="Réinitialiser",
@@ -358,6 +399,9 @@ class Repartitions(CTkFrame):
         yscrollbar = ttk.Scrollbar(tree_container, orient=VERTICAL, command=self.TableListe.yview)
         self.TableListe.configure(xscrollcommand=xscrollbar.set, yscrollcommand=yscrollbar.set)
         self.TableListe.bind("<ButtonRelease-1>",self.getDonnerAccepted)
+        self.TableListe.bind("<Button-3>", self.afficher_menu_contextuel) # Clic droit (Windows/Linux)
+     
+    
 
         # Placement du treeview et des scrollbars
         self.TableListe.grid(row=0, column=0, sticky="nsew")
@@ -434,7 +478,7 @@ class Repartitions(CTkFrame):
         yscrollbarc = ttk.Scrollbar(tree_container2, orient=VERTICAL, command=self.TableListeClasse.yview)
         self.TableListeClasse.configure(xscrollcommand=xscrollbarc.set, yscrollcommand=yscrollbarc.set)
 
-        self.TableListeClasse.bind("<Button-3>", self.afficher_menu)
+        self.TableListeClasse.bind("<Button-3>", self.afficher_menuC)
 
 
         # Placement du treeview et des scrollbars
@@ -449,25 +493,58 @@ class Repartitions(CTkFrame):
 
     
     def getAccepted(self):
+        """
+        Récupère et affiche la liste des élèves acceptés dans le Treeview.
+
+        Cette méthode interroge la base de données pour obtenir tous les élèves
+        ayant le statut 'ACCEPTED' et les affiche dans le tableau TableListe.
+        En cas d'erreur de connexion, affiche un message d'erreur.
+
+        Raises:
+            Exception: En cas d'erreur de connexion à la base de données
+        """
         try:
+            self.TableListe.delete(*self.TableListe.get_children())
+            # Vérifie si la connexion à la base de données est établie
             if self.Database.connection:
+                # Appelle la méthode du gestionnaire de BD pour récupérer les élèves acceptés
                 data=self.Database.GetEleveAccepted()
                 if data:
+                    # Vide le tableau avant d'insérer les nouvelles données
                     for row in data:
                         self.TableListe.delete(*self.TableListe.get_children())
+                        # Insère chaque élève dans le Treeview
                         self.TableListe.insert("",END,values=row)
-                        print(row)
+                        print('ELEVE ACCEPTER TROUVER:',row)
                 else:
+                    # Si aucune donnée, insère une ligne vide
                     self.TableListe.insert("",END,values=[])
                     
         except Exception as e:
+            # Affiche un message d'erreur en cas de problème
             messagebox.showerror("Erreur",f"Erreur de connection {e}")
     
     def executer_repartition_et_synchronisation(self):
+        """
+        Exécute la répartition automatique des élèves et synchronise avec la base de données.
+
+        Cette méthode répartit les élèves acceptés non encore affectés dans des classes
+        de A à Z selon le nombre de classes spécifié. Elle crée les classes si elles
+        n'existent pas, affecte les élèves et met à jour les informations.
+
+        Le processus suit un algorithme round-robin pour distribuer équitablement
+        les élèves dans les classes.
+
+        Raises:
+            ValueError: Si le nombre de classes n'est pas un entier valide
+        """
         """Algorithme combiné : Répartit A->Z et crée les liens officiels"""
         # try:
+        # Récupère le niveau scolaire sélectionné et le convertit en majuscules
         niveau = self.niveau_var.get().upper()
+        # Récupère le nombre de classes à créer
         nb = int(self.nnbrClasse.get())
+        # Génère les lettres de classe selon le nombre spécifié (A, B, C, etc.)
         lettres = ["A", "B", "C", "D", "E", "F"][:nb]
         annee = "2025-2026"
             
@@ -489,7 +566,7 @@ class Repartitions(CTkFrame):
 
         count = 0
         for id_eleve, nom, prenom in eleves:
-                # Calcul de la classe (Round-robin)
+                # Calcul de la classe (Round-robin) - distribution équilibrée
             lettre = lettres[count % nb]
             nom_classe = f"{niveau} {lettre}"
 
@@ -519,10 +596,25 @@ class Repartitions(CTkFrame):
 
     
     def getDonnerAccepted(self,ev):
+        """
+        Récupère les données de l'élève sélectionné dans le Treeview des acceptés.
+
+        Cette méthode est appelée lors d'un clic sur une ligne du tableau des élèves
+        acceptés. Elle remplit automatiquement les champs du formulaire avec les
+        informations de l'élève sélectionné.
+
+        Args:
+            ev: Événement du clic (non utilisé dans cette implémentation)
+
+        Note:
+            En cas d'IndexError (ligne vide sélectionnée), l'exception est ignorée.
+        """
         selected =self.TableListe.focus()
         try:
+            # Récupère les valeurs de la ligne sélectionnée
             values =self.TableListe.item(selected,'values')
 
+            # Remplit les variables des champs avec les données de l'élève
             self.id_var.set(values[0])
             self.matricule_var.set(values[1])
             self.nom_var.set(values[2])
@@ -531,80 +623,152 @@ class Repartitions(CTkFrame):
             self.addresse_var.set(values[5])
             self.classe_var.set(values[6])
         except IndexError:
+            # Ignore si aucune ligne valide n'est sélectionnée
             pass
     
     def afficherClasse(self,value):
-        """Fonction qui va afficher les eleves 
+        """
+        Affiche les élèves d'une classe réelle sélectionnée dans le Treeview.
+
+        Cette méthode est appelée lorsque l'utilisateur sélectionne une classe
+        dans le combobox. Elle récupère tous les élèves de cette classe et les
+        affiche dans le tableau des classes réelles.
 
         Args:
-           
+            value: La valeur sélectionnée dans le combobox (nom de la classe)
+
+        Raises:
+            Exception: En cas d'erreur de connexion à la base de données
         """
 
         try:
+            # Vérifie la connexion à la base de données
             if self.Database.connection:
                  #recuperer la liste des classe reel pour le combox
 
                 classe_reel =self.classReelCombox.get()
                 print(f"Classe réelle sélectionnée e : {classe_reel}")  # Debug: afficher la classe réelle sélectionnée
+                # Appelle la méthode pour récupérer les élèves de la classe sélectionnée
                 data=self.Database.GetEleveByClasse(classe_reel)
                 if data:
+                    # Vide le tableau et insère les nouvelles données
                     for row in data:
                         self.TableListeClasse.delete(*self.TableListeClasse.get_children())
                         self.TableListeClasse.insert("",END,values=row)
                         print(row)
                 else:
+                    # Si aucune donnée, insère une ligne vide
                     self.TableListeClasse.insert("",END,values=[])
                     
         except Exception as e:
+            # Affiche un message d'erreur en cas de problème
             messagebox.showerror("Erreur",f"Erreur de connection {e}")
 
 
     
 
-    def afficher_menu(self, event):
+    def afficher_menuC(self, event):
+        """
+        Affiche le menu contextuel pour les actions sur les élèves des classes réelles.
 
+        Cette méthode est appelée lors d'un clic droit sur une ligne du tableau
+        des classes réelles. Elle sélectionne la ligne et affiche le menu contextuel.
+
+        Args:
+            event: L'événement du clic droit contenant les coordonnées
+        """
+        # Identifie la ligne sous la souris
         item = self.TableListeClasse.identify_row(event.y)
 
         if item:
+            # Sélectionne la ligne identifiée
             self.TableListeClasse.selection_set(item)
 
+            # Récupère les valeurs de la ligne sélectionnée
             self.selected_item = self.TableListeClasse.item(item, "values")
 
-            self.menu_tree.tk_popup(event.x_root, event.y_root)
+            # Affiche le menu contextuel à la position du clic
+            self.menu_treeC.tk_popup(event.x_root, event.y_root)
+
 
     def voir_details(self):
+        """
+        Affiche les détails de l'élève sélectionné.
 
+        Cette méthode est appelée depuis le menu contextuel pour voir
+        les informations détaillées de l'élève sélectionné.
+
+        Note:
+            Actuellement, cette méthode affiche seulement un message de debug.
+            Elle devrait être implémentée pour ouvrir une fenêtre de détails.
+        """
         print("Détails :", self.selected_item)
 
 
     def modifier_eleve(self):
+        """
+        Ouvre une interface pour modifier les informations de l'élève sélectionné.
 
+        Cette méthode est appelée depuis le menu contextuel pour permettre
+        la modification des données de l'élève.
+
+        Note:
+            Actuellement, cette méthode affiche seulement un message de debug.
+            Elle devrait être implémentée pour ouvrir une fenêtre d'édition.
+        """
         print("Modifier :", self.selected_item)
 
 
     def supprimer_eleve(self):
+        """
+        Supprime l'élève sélectionné après confirmation.
 
+        Cette méthode est appelée depuis le menu contextuel pour supprimer
+        un élève de la base de données.
+
+        Note:
+            Actuellement, cette méthode affiche seulement un message de debug.
+            Elle devrait être implémentée avec une confirmation et la logique de suppression.
+        """
         print("Supprimer :", self.selected_item)
-
-    # ===================== METHODES POUR LES BOUTONS =====================
-
-   
     
-    def affectation_unique(self):
-        """Methode pour l'affectation unique d'un eleve a une classe"""
-        matricule = self.matricule_entry.get()
-        nom = self.nom_entry.get()
-        prenom = self.prenom_entry.get()
-        date_naissance = self.date_naissance_entry.get()
-        addresse = self.addresse_entry.get()
-        classe = self.classe_entry.get()
-        
-        print(f"Affectation Unique - Matricule: {matricule}, Nom: {nom}, Prenom: {prenom}")
-        print(f"Date Naissance: {date_naissance}, Addresse: {addresse}, Classe: {classe}")
-        # Implementer la logique d'affectation unique ici
+
+
+    def afficher_menu_contextuel(self, event):
+        # Trouver la ligne sous la souris
+        item_id = self.TableListe.identify_row(event.y)
+        if item_id:
+            self.TableListe.selection_set(item_id) # Sélectionne la ligne
+            self.selected_item = self.TableListe.item(item_id, 'values') # Récupère les données
+            
+            # On vide le menu précédent
+            self.menu_treeL.delete(0, END)
+            
+            # On ajoute des options dynamiques basées sur le niveau souhaité
+            niveau = self.selected_item[6] #  le niveau est en 7ème colonne
+            
+            for lettre in ["A", "B", "C", "D"]:
+                nom_classe = f"{niveau} {lettre}"
+                self.menu_treeL.add_command(
+                    label=f"Affecter en {nom_classe}", 
+                    command=lambda c=nom_classe: self.Database.affecter_individuel(c, self.selected_item,self.getAccepted))
+                #si sa reussi on doit rafraichir la table des élèves acceptés et la table des classes réelles
+
+           
+               
+            
+            # Afficher le menu là où se trouve la souris
+            self.menu_treeL.post(event.x_root, event.y_root)
+    
+    # ===================== METHODES POUR LES BOUTONS =====================
     
     def reinitialiser_champs(self):
-        """Reinitialise tous les champs d'entree"""
+        """
+        Réinitialise tous les champs d'entrée du formulaire.
+
+        Cette méthode vide tous les champs de saisie et les listes déroulantes
+        pour permettre une nouvelle saisie.
+        """
         self.matricule_entry.delete(0, END)
         self.nom_entry.delete(0, END)
         self.prenom_entry.delete(0, END)

@@ -203,3 +203,42 @@ class DbManager:
                  return None
         except Exception as e :
               messagebox.showerror("Erreur",f"Erreur lors de l'obtention du fichier : {e}")
+
+    
+
+
+
+
+    
+    
+    def affecter_individuel(self, classe_cible,selected_items,func):
+        id_eleve = selected_items[0] # L'ID de l'élève
+        print("repartir unique",id_eleve)
+        try:
+            cursor = self.connection.cursor()
+            
+            # 1. Mise à jour de la classe réelle
+            cursor.execute("UPDATE Inscriptions_eleve SET classe_reelle = %s WHERE id = %s", (classe_cible, id_eleve))
+            
+            # 2. Création de l'affectation officielle (comme dans l'algorithme groupé)
+            cursor.execute("INSERT  IGNORE INTO Classes (nom_classe) VALUES (%s)", (classe_cible,))
+            cursor.execute("SELECT id FROM Classes WHERE nom_classe = %s", (classe_cible,))
+            id_classe = cursor.fetchone()[0]
+
+            cursor.execute("""
+            INSERT INTO Scolarite_Affectation (eleve_id, classe_id, annee_scolaire)
+            VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+            classe_id = VALUES(classe_id),
+            annee_scolaire = VALUES(annee_scolaire)
+            """, (id_eleve, id_classe, "2025-2026"))  # corriger l'année apres exemple(anne passer - ann d'aujouduit)
+
+            self.connection.commit()
+            messagebox.showinfo("Succès", f"L'élève a été affecté en {classe_cible}")
+            # self.refresh_treeview() # Pour mettre à jour l'affichage
+            print('apple')
+            func()
+            print("fini")
+            
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Impossible d'affecter l'élève : {e}")
