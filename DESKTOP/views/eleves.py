@@ -39,10 +39,14 @@ class EleveView(CTkFrame):
         self.imagePath =StringVar()
         self.typesearch_var =StringVar()
 
-        #document de l'eleve
-        self.acteNaissance =None
-        self.diplome =None
-        self.last_bulletin =None
+        #document de l'eleve (nom des fichiers récupérés en base)
+        self.acteNaissance = None
+        self.diplome = None
+        self.last_bulletin = None
+        # chemins vers les documents (utilisés par ShowEleveDocument)
+        self.docActeNaissance = None
+        self.docDiplome = None
+        self.docBulletin = None
 
         #titre de la pages
         titreFrame =CTkFrame(self,fg_color='lightblue',border_width=0,height=50)
@@ -361,24 +365,31 @@ class EleveView(CTkFrame):
 
            
     def GetEleveDocument(self):
-        """Fonction qui va afficher les differents Documents de l'eleve lors de l'inscription
+        """Récupère les chemins des documents pour l'élève sélectionné.
 
-        Args:
-        Return
-            Retourne un liste vers le lien de chaque document
+        La méthode interroge la base de données et stocke les trois
+        fichiers dans des attributs de l'instance. Elle renvoie également
+        la liste retournée par la base afin que l'appelant puisse
+        l'exploiter directement.
 
-              """
+        Returns
+            Une liste de trois éléments [acteNaissance, diplome, bulletin]
+            ou ``None`` si aucun document n'a été trouvé. Dans ce dernier cas
+            une boîte de dialogue est affichée.
+        """
         if self.Database.connection:
-            documents =self.Database.GetDocuments(self.id_var.get())
+            documents = self.Database.GetDocuments(self.id_var.get(),)
             if documents:
-                    
-                self.docBulletin =documents[2]
-                self.docDiplome =documents[1]
-                self.docActeNaissance =documents[0]
-                print(self.docActeNaissance,self.docBulletin,self.docDiplome)
-            
+                print("Documents trouvés :", documents)  # Debug: afficher les documents récupérés
+                # les index correspondent à l'ordre renvoyé par GetDocuments
+                self.docActeNaissance = documents[0]
+                self.docDiplome = documents[1]
+                self.docBulletin = documents[2]
+                print(self.docActeNaissance, self.docDiplome, self.docBulletin)
+                return documents
             else:
-                messagebox.showinfo("Documents",f"Aucun document trouvé pour cet eleve")
+                messagebox.showinfo("Documents", "Aucun document trouvé pour cet eleve")
+        return None
 
     def ShowEleveDocument(self):
         """Fonction qui va se charger d'afficher les documents dans une fenetre separer
@@ -390,9 +401,15 @@ class EleveView(CTkFrame):
         Pillow (PIL) : Pour manipuler l'image et la rendre compatible avec Tkinter.
 
         """
-        documents =self.GetEleveDocument()
-        # creatio de notre top level pour afficher les documents
-        docWindow= CTkToplevel(self,fg_color=BACKGROUND_LIGHT)
+        documents = self.GetEleveDocument()
+        if not documents:
+            print("pas de documents")
+
+            # rien à afficher ou erreur déjà signalée
+            return
+
+        # création de notre top level pour afficher les documents
+        docWindow = CTkToplevel(self, fg_color=BACKGROUND_LIGHT)
         docWindow.geometry("600x800+750+10")
         docWindow.title("Documents de l'eleve")
         docWindow.resizable(False,False) #ne doit pas etre redimentsionner
@@ -412,24 +429,31 @@ class EleveView(CTkFrame):
         self.Tabview.add("Diplome")
         self.Tabview.add("Dernier Bulletin")
 
-        if self.docActeNaissance:
-            actenaissance_img =DocView(documentpath =INSCRIPTION_DIR / self.docActeNaissance)
-            self.labelActe=CTkLabel(self.Tabview.tab("Acte de Naissance"),text= "",image=actenaissance_img,width =596,height =842,fg_color ="red")
-            self.labelActe.pack(fill ="both",pady =20,padx =10,expand =True)
-            
-        if self.docDiplome:
+      
+        # utiliser les valeurs retournées plutôt que des attributs non initialisés
+        acte_path, diplome_path, bulletin_path = documents
+        if not acte_path:
+            messagebox.showwarning("Documents", "Aucun acte de naissance disponible")
+        else:
+            actenaissance_img = DocView(documentpath=INSCRIPTION_DIR / acte_path)
+            self.labelActe = CTkLabel(self.Tabview.tab("Acte de Naissance"), text="", image=actenaissance_img, width=596, height=842, fg_color="red")
+            self.labelActe.pack(fill="both", pady=20, padx=10, expand=True)
+        # affichage du diplome et du bulletin si présents
+        if diplome_path:
+            diplome_img = DocView(documentpath=INSCRIPTION_DIR / diplome_path)
+            self.labelDiplome = CTkLabel(self.Tabview.tab("Diplome"), image=diplome_img, fg_color="green", font=FONT_H1)
+            self.labelDiplome.pack(fill=BOTH, expand=True)
+        else:
+            messagebox.showwarning("Documents", "Aucun diplôme disponible")
 
-            diplome_img= DocView(documentpath =INSCRIPTION_DIR / self.docDiplome) #le diplome convertit en image
-            self.labelDiplome=CTkLabel(self.Tabview.tab("Diplome"),image =diplome_img,fg_color="green",font =FONT_H1)
-            self.labelDiplome.pack(fill =BOTH,expand =True)
-            
-        if self.docBulletin:
-            bulletin_img =DocView(documentpath =INSCRIPTION_DIR / self.docBulletin) #le bulletin converti en image
-            self.last_bulletin=CTkLabel(self.Tabview.tab("Dernier Bulletin"),image=bulletin_img,fg_color="gold",font =FONT_H1)
-            self.last_bulletin.pack(fill =BOTH,expand =True)
-            
+        if bulletin_path:
+            bulletin_img = DocView(documentpath=INSCRIPTION_DIR / bulletin_path)
+            self.last_bulletin = CTkLabel(self.Tabview.tab("Dernier Bulletin"), image=bulletin_img, fg_color="gold", font=FONT_H1)
+            self.last_bulletin.pack(fill=BOTH, expand=True)
+        else:
+            messagebox.showwarning("Documents", "Aucun bulletin disponible")
 
-        docWindow.grab_set() #empeche l'interaction avec la fenetre principale tant quel reste ouverte
+        docWindow.grab_set()  # empeche l'interaction avec la fenetre principale tant qu'elle reste ouverte
         docWindow.mainloop()
 
 

@@ -15,7 +15,7 @@ DB_CONFIG={
 }
 #pour sqlite3
 def getConnection():
-    db =sqlite3.connect(r"WEB\db.sqlite3")
+    db =mysql.connector.connect(**DB_CONFIG)
     if db:
 
         return db
@@ -32,6 +32,7 @@ def close():
 class DbManager:
     def __init__(self):
         self.connection =getConnection()
+        self.SetAfecTable()
     
 
         #fonction pour rafraichir si il ya de dossier en attente
@@ -45,20 +46,64 @@ class DbManager:
             return rows
         except Exception as e:
             messagebox.showerror("Errreur",f"Erreur de {e}")
+    
+    def GetEleveAccepted(self):
+        """
+        Function pour recuperer tous les eleves dont le statut d'inscription est accepter
+        Returns:
+                List:returne une liste de tuple de tous les donner vrai
+                None:si il ya rien
+        """
+        try:
+            with self.connection.cursor() as cursor:
+                cursor.execute("""  SELECT id,matricule, nom,prenom,date_naissance,adresse,classe FROM Inscriptions_eleve WHERE statut = 'ACCEPTED' AND classe_reelle ='' """ )
+                data =cursor.fetchall()
+                if data:
+                    print(data)
+                    return data
+                else:
+                    return None
+        
+        except Exception as e:
+            messagebox.showerror("Erreur",f"Erreur de {e}")
+    
+     
+    def SetAfecTable(self):
+        """Methode pour l'affectation multiple - a implementer selon la logique metier"""
+        # Implementer la logique d'affectation multiple ici
+        """Prépare les tables de gestion si elles n'existent pas"""
+        try:
+            cursor = self.connection.cursor()
+            # Table des étiquettes de classes
+            cursor.execute("CREATE TABLE IF NOT EXISTS Classes (id INTEGER PRIMARY KEY AUTO_INCREMENT, nom_classe VARCHAR(20) UNIQUE)")
+            # Table des liens officiels (Affectations)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS Scolarite_Affectation (
+                    id INTEGER PRIMARY KEY AUTO_INCREMENT,
+                    eleve_id VARCHAR(60),
+                    classe_id INTEGER,
+                    annee_scolaire VARCHAR(20),
+                    FOREIGN KEY(eleve_id) REFERENCES Inscriptions_eleve(id),
+                    FOREIGN KEY(classe_id) REFERENCES Classes(id)
+                )
+            """)
+            self.connection.commit()
+        except Exception as e:
+                messagebox.showerror("Erreur",f"Erreur de :{e}")
 
-    def AcceptedInscription(self,matricule:str,id:str):
+    def AcceptedInscription(self,matricule:str,eleve_id:str):
         """Foncction qui sera apeler pour accepter l'inscription d'un eleve
         Args:
             matricule (str): Le numero matricule donner lors de l'inscription
-            id (str): l'identifiant
-        
+            eleve_id (str): L'identifiant unique de l'élève
         """
         try:
             cursor = self.connection.cursor()
-            cursor.execute("UPDATE Inscriptions_eleve SET statut ='ACCEPTE' WHERE matricule = ?",(matricule,))
+            cursor.execute("UPDATE Inscriptions_eleve SET statut ='ACCEPTED' WHERE matricule = %s",(matricule,))
             self.connection.commit()
             #valider aussi les documents
-            cursor.execute("UPDATE Inscriptions_documenteleve SET est_valide = TRUE WHERE id = ?",{id})
+            cursor.execute("UPDATE Inscriptions_documenteleve SET est_valide = 1 WHERE eleve_id = %s",(eleve_id,))
+            self.connection.commit()
             messagebox.showinfo("Succès",f"Inscription de l'eleve {matricule} a été accepté")
         except Exception as e:
             messagebox.showerror("Errreur",f"Erreur de {e}")
@@ -71,11 +116,17 @@ class DbManager:
             matricule (str): matricule a l'inscription 
             id (str): l'identifiant unique 
         """
+        if self.connection:
+            print("Connexion à la base de données réussie.")
+            print(f"ID recherché : {id}")  # Debug: afficher l'ID recherché
+        else:
+            print("Échec de la connexion à la base de données.")
         try:
             if self.connection:
                 cursor =self.connection.cursor()
-                cursor.execute("SELECT acte_naissance,diplome,last_bulletin from Inscriptions_documenteleve where eleve_id =?",(id,))
+                cursor.execute("SELECT acte_naissance,diplome,last_bulletin from Inscriptions_documenteleve where eleve_id = %s",(id,))
                 row =cursor.fetchone()
+                print("Row obtenue :", row)  # Debug: afficher la ligne obtenue
                 return row if row else  None
             else:
                  return None
@@ -105,3 +156,50 @@ class DbManager:
         except Exception as e:
             messagebox.showerror("Erreur",f"Erreur de connection a la base de donner: {e}")
     
+
+    def getClasseReel(self):
+        """Fonction pour selectionner le nom de tous les classe relles present
+
+        Returns:
+            List: retourne une liste de classe reel ou rien
+
+        """
+
+        try:
+            if self.connection:
+                with self.connection.cursor() as cursor:
+                    cursor.execute("SELECT nom_classe FROM Classes")
+                    rows = cursor.fetchall()
+                    print("Classes réelles obtenues :", rows)  # Debug: afficher les classes réelles obtenues
+                    return [row[0] for row in rows] if rows else None
+            else:
+                 return None
+        except Exception as e :
+              messagebox.showerror("Erreur",f"Erreur lors de l'obtention du fichier : {e}")
+    
+
+    def GetEleveByClasse(self,classrel:str):
+        """Fonction pour selectionner tous les eleves d'une classe reel
+
+        Args:
+            classrel (str): le nom de la classe reel
+
+        Returns:
+            List: retourne une liste de tuple de tous les eleves d'une classe reel ou rien
+        """
+        try:
+            if self.connection:
+                with self.connection.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT ie.id, ie.matricule, ie.nom, ie.prenom, ie.date_naissance, ie.adresse, ie.classe_reelle, ie.photo 
+                        FROM Inscriptions_eleve ie
+                        JOIN Scolarite_Affectation sa ON ie.id = sa.eleve_id
+                        JOIN Classes c ON sa.classe_id = c.id
+                        WHERE c.nom_classe = %s AND ie.statut = 'ACCEPTED'
+                    """, (classrel,))
+                    rows = cursor.fetchall()
+                    return rows if rows else None
+            else:
+                 return None
+        except Exception as e :
+              messagebox.showerror("Erreur",f"Erreur lors de l'obtention du fichier : {e}")

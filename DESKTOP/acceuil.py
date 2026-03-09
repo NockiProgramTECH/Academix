@@ -69,28 +69,80 @@ class Acceuil(CTk):
         BTN ={
             1:{
                 'text':"Gestion Des Eleves",
-                'command':lambda:self.show_eleve_view(),
+                'command':lambda:self.show_view("eleve"),
                 'image':''
             },
             2:{
                 "text":"Affectation Par Classe",
-                "command":lambda:print("Gestion cours") ,
+                "command":lambda:self.show_view("repartitions"),
                 "image":''
             }
         }
-       
 
+    
         for key,value in BTN.items():
            btn =CTkButton(sidebar,text=value['text'],font=FONT_TITLE,fg_color=SIDEBAR_BG,text_color=SIDEBAR_TEXT,command=value['command'],hover_color=SIDEBAR_HOVER,border_width=5)
            btn.pack(fill=X,pady=5,padx=10,)
 
-    def show_eleve_view(self):
+
+        # =====================================================
+        # PRE-CREATION DES VUES (Optimisation performance)
+        # =====================================================
+        # Toutes les vues sont créées au démarrage mais cachées
+        # Elles seront affichées au clic sur les boutons
+        self.views = {}
+        
+        # Pré-créer la vue eleves (la plus utilisée)
+        self._create_eleve_view()
+        
+        # Pré-créer placeholder pour les autres vues (à compléter)
+        self.views["repartitions"] = self._create_repartitions_view()
+        
+        # Afficher la vue d'accueil par défaut (eleve)
+        self.current_view = "eleve"
+        # Afficher la vue EleveView au démarrage
+        self.views["eleve"].pack(fill=BOTH, expand=True)
+
+    def _create_eleve_view(self):
+        """Pré-créer la vue eleves"""
         from views.eleves import EleveView
-        #clear mainframe
-        for widget in self.mainFrame.winfo_children():
-            widget.destroy()
-        eleve_view =EleveView(self.mainFrame)
-        eleve_view.pack(fill=BOTH,expand=True)
+        eleve_view = EleveView(self.mainFrame)
+        eleve_view.pack(fill=BOTH, expand=True)
+        # Cacher initialement
+        eleve_view.pack_forget()
+        self.views["eleve"] = eleve_view
+
+    def _create_repartitions_view(self):
+        from views.repartitions import Repartitions
+        repartitions_view = Repartitions(self.mainFrame)
+        repartitions_view.pack(fill=BOTH, expand=True)
+        # Cacher initialement
+        repartitions_view.pack_forget()
+        self.views["repartitions"] = repartitions_view
+        return repartitions_view
+
+
+    def show_view(self, view_name):
+        """Afficher une vue spécifique en cachant les autres"""
+        # Vérifier si la vue existe
+        if view_name not in self.views:
+            return
+        
+        # Cacher la vue actuelle
+        if self.current_view and self.current_view in self.views:
+            self.views[self.current_view].pack_forget()
+        
+        # Afficher la nouvelle vue
+        self.views[view_name].pack(fill=BOTH, expand=True)
+        self.current_view = view_name
+        
+        # Rafraîchir les données si c'est la vue eleves
+        if view_name == "eleve" and hasattr(self.views["eleve"], "refresh"):
+            self.views["eleve"].refresh()
+
+    def show_eleve_view(self):
+        """Méthode de compatibilité - redirige vers show_view"""
+        self.show_view("eleve")
 
     def showNotifications(self):
         """fonction pour afficher le nombre de notifications
@@ -105,8 +157,6 @@ class Acceuil(CTk):
     
         except Exception as e :
             messagebox.showerror("Erreur",f"Erreur de :{e}")
-
-
 
 if __name__ =="__main__":
     app =Acceuil()
