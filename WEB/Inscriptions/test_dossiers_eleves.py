@@ -7,8 +7,13 @@ Exécuter ces tests avec: python manage.py shell
 # EXEMPLE 1: Créer un élève et son dossier
 # ============================================
 
-from Inscriptions.models import Eleve
-from Inscriptions.utils import check_eleve_folder_exists, get_eleve_directory
+from WEB.Inscriptions.models import Eleve
+from Inscriptions.utils import (
+    check_eleve_folder_exists,
+    get_eleve_directory,
+    get_photos_directory,
+    get_documents_directory,
+)
 from django.core.files.base import ContentFile
 import os
 
@@ -22,15 +27,18 @@ nouvel_eleve = Eleve.objects.create(
 )
 
 print(f"✓ Élève créé: {nouvel_eleve.nom_complet}")
+print(f"  UUID dossier: {nouvel_eleve.id}")
 print(f"  Matricule: {nouvel_eleve.matricule}")
 print(f"  Classe: {nouvel_eleve.classe}")
 
 # Vérifier que le dossier a été créé
-dossier_existe = check_eleve_folder_exists("5EME", "LANKOANDE-Eben Ezer")
-if dossier_existe:
+# on utilise désormais l'uuid pour retrouver le répertoire
+if check_eleve_folder_exists(nouvel_eleve.classe, nouvel_eleve.id):
     print(f"✓ Dossier créé avec succès!")
-    chemin_dossier = get_eleve_directory("5EME", "LANKOANDE-Eben Ezer")
+    chemin_dossier = get_eleve_directory(nouvel_eleve.classe, nouvel_eleve.id)
     print(f"  Chemin: {chemin_dossier}")
+    print(f"  Photos: {get_photos_directory(nouvel_eleve.classe, nouvel_eleve.id)}")
+    print(f"  Documents: {get_documents_directory(nouvel_eleve.classe, nouvel_eleve.id)}")
 else:
     print("✗ Erreur: le dossier n'a pas été créé")
 
@@ -56,15 +64,15 @@ print(f"  Chemin: {eleve.photo.path}")
 # EXEMPLE 3: Lister tous les élèves d'une classe
 # ============================================
 
-from Inscriptions.models import Eleve
+from WEB.Inscriptions.models import Eleve
 
 eleves_5eme = Eleve.objects.filter(classe="5EME")
 
 print(f"\n5 élèves en 5ème:")
 for eleve in eleves_5eme:
-    dossier_existe = check_eleve_folder_exists(eleve.classe, eleve.nom_complet)
+    dossier_existe = check_eleve_folder_exists(eleve.classe, eleve.id)
     statut = "✓" if dossier_existe else "✗"
-    print(f"  {statut} {eleve.nom_complet} - Matricule: {eleve.matricule}")
+    print(f"  {statut} {eleve.nom_complet} - UUID: {eleve.id} - Matricule: {eleve.matricule}")
 
 
 # ============================================
@@ -96,14 +104,14 @@ else:
 # EXEMPLE 5: Supprimer un élève et son dossier
 # ============================================
 
-from Inscriptions.models import Eleve
+from WEB.Inscriptions.models import Eleve
 
 eleve_a_supprimer = Eleve.objects.get(nom="LANKOANDE", prenom="Eben Ezer")
-dossier = get_eleve_directory(eleve_a_supprimer.classe, eleve_a_supprimer.nom_complet)
+dossier = get_eleve_directory(eleve_a_supprimer.classe, eleve_a_supprimer.id)
 
 print(f"\nSuppression de {eleve_a_supprimer.nom_complet}...")
 
-if check_eleve_folder_exists(eleve_a_supprimer.classe, eleve_a_supprimer.nom_complet):
+if check_eleve_folder_exists(eleve_a_supprimer.classe, eleve_a_supprimer.id):
     print(f"  Dossier trouvé: {dossier}")
 
 # Supprimer l'élève (le dossier sera supprimé automatiquement)
@@ -138,7 +146,7 @@ for data in eleves_data:
             classe=data['classe'],
             adresse="Ouagadougou"
         )
-        print(f"  ✓ {eleve.nom_complet} - Dossier: {data['classe']}/photos/{eleve.nom_complet}/")
+        print(f"  ✓ {eleve.nom_complet} - UUID dossier: {eleve.id}")
     except Exception as e:
         print(f"  ✗ Erreur pour {data['nom']} {data['prenom']}: {str(e)}")
 

@@ -26,6 +26,8 @@ class EleveView(CTkFrame):
         self.Database =DbManager()
         self.configure(fg_color=BACKGROUND_LIGHT)
 
+        self._refresh_job = None  # ← AJOUTER : référence au job after()
+
 
         #*VARIABLES
         self.id_var =StringVar()
@@ -287,19 +289,25 @@ class EleveView(CTkFrame):
         self.TableListe.bind("<ButtonRelease-1>",self.getListeData)
 
         self.TableListe.pack(fill=BOTH,expand=True,pady=10,padx=10)
-        self.GetEleves()
+    
 
         #place de de notre frame 
         self.pack(fill =BOTH,expand =True)
     
     def GetEleves(self):
         if self.Database.connection:
-            datas =self.Database.refresh_pending_list()
+            data =self.Database.refresh_pending_list()
             self.TableListe.delete(*self.TableListe.get_children())
           
-            for row in datas:
+            for row in data:
 
                 self.TableListe.insert("",END,values  =row)
+
+    
+    def refresh(self):
+        """Appelé depuis main.py à chaque fois qu'on affiche cette vue."""
+        self.clear()           # vide les champs du formulaire
+        self.GetEleves()
     
     
     #fonction d"evenement click sur une ligne du tableau qui va retourner les element dans les entry
@@ -307,15 +315,24 @@ class EleveView(CTkFrame):
     def getListeData(self,ev):
         selected =self.TableListe.focus()
         values =self.TableListe.item(selected,'values')
-        self.id_var.set(values[0])
-        self.matricule_var.set(values[1])
-        self.nom_var.set(values[2])
-        self.prenom_var.set(values[3])
-        self.date_naissance_var.set(values[4])
-        self.addresse_var.set(values[5])
-        self.classe_var.set(values[6])
-        self.imagePath.set(values[7])
-        self.showImage(self.imagePath.get())
+        
+        # Vérifier si une ligne valide est sélectionnée
+        if not values:
+            return
+        
+        try:
+            self.id_var.set(values[0])
+            self.matricule_var.set(values[1])
+            self.nom_var.set(values[2])
+            self.prenom_var.set(values[3])
+            self.date_naissance_var.set(values[4])
+            self.addresse_var.set(values[5])
+            self.classe_var.set(values[6])
+            self.imagePath.set(values[7])
+            self.showImage(self.imagePath.get())
+        except IndexError:
+            # Ignore les erreurs d'index si les données sont incomplètes
+            pass
 
 
 
@@ -390,6 +407,50 @@ class EleveView(CTkFrame):
             else:
                 messagebox.showinfo("Documents", "Aucun document trouvé pour cet eleve")
         return None
+    
+
+
+    def _poll_database(self):
+        """Requête silencieuse : rafraîchit le Treeview sans toucher
+        aux champs du formulaire ni à la sélection en cours."""
+        if not self.Database.connection:
+            return
+        try:
+            nouvelles_datas = self.Database.refresh_pending_list()
+            
+            # Construit un set des IDs déjà affichés
+            ids_affiches = {
+                self.TableListe.item(i, "values")[0]
+                for i in self.TableListe.get_children()
+            }
+            # Construit un set des IDs reçus de la BDD
+            ids_bdd = {str(row[0]) for row in nouvelles_datas} if nouvelles_datas else set()
+
+            # Rafraîchit seulement si les données ont changé
+            if ids_affiches != ids_bdd:
+                self.TableListe.delete(*self.TableListe.get_children())
+                for row in nouvelles_datas:
+                    self.TableListe.insert("", END, values=row)
+
+        except Exception:
+            pass  # Silencieux : on ne spamme pas de popups en arrière-plan
+
+    def _start_auto_refresh(self):
+        """Démarre le polling (appelé quand la vue devient visible)."""
+        self._stop_auto_refresh()  # évite les doublons
+        self._auto_refresh()
+
+    def _auto_refresh(self):
+        """Boucle : interroge la BDD puis se replanifie dans 10 s."""
+        self._poll_database()
+        self._refresh_job = self.after(10000, self._auto_refresh)
+
+    def _stop_auto_refresh(self):
+        """Stoppe le polling (appelé quand la vue est cachée)."""
+        if self._refresh_job is not None:
+            self.after_cancel(self._refresh_job)
+            self._refresh_job = None
+    
 
     def ShowEleveDocument(self):
         """Fonction qui va se charger d'afficher les documents dans une fenetre separer

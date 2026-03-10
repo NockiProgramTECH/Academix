@@ -53,6 +53,9 @@ class Repartitions(CTkFrame):
         self.Database =DbManager()
         self.configure(fg_color=BACKGROUND_LIGHT)
 
+        self._refresh_job = None  # ← AJOUTER 
+    
+
 
 
         ##########################################################
@@ -60,7 +63,7 @@ class Repartitions(CTkFrame):
 
         self.menu_treeC.add_command(label="Voir détails", command="")
         self.menu_treeC.add_command(label="Modifier", command="")
-        self.menu_treeC.add_command(label="Supprimer", command="")
+        self.menu_treeC.add_command(label="Supprimer", command=self.supprimer_eleve)
 
         self.menu_treeL = Menu(self, tearoff=0)
          
@@ -407,6 +410,7 @@ class Repartitions(CTkFrame):
         self.TableListe.grid(row=0, column=0, sticky="nsew")
         xscrollbar.grid(row=1, column=0, sticky="ew")
         yscrollbar.grid(row=0, column=1, sticky="ns")
+    
 
         tree_container.grid_rowconfigure(0, weight=1)
         tree_container.grid_columnconfigure(0, weight=1)
@@ -488,9 +492,6 @@ class Repartitions(CTkFrame):
 
         tree_container2.grid_rowconfigure(0, weight=1)
         tree_container2.grid_columnconfigure(0, weight=1)
-
-        self.getAccepted()
-
     
     def getAccepted(self):
         """
@@ -504,12 +505,15 @@ class Repartitions(CTkFrame):
             Exception: En cas d'erreur de connexion à la base de données
         """
         try:
-            self.TableListe.delete(*self.TableListe.get_children())
+            print("Maintine")
             # Vérifie si la connexion à la base de données est établie
             if self.Database.connection:
+                print("connecter")
                 # Appelle la méthode du gestionnaire de BD pour récupérer les élèves acceptés
                 data=self.Database.GetEleveAccepted()
+                print(data)
                 if data:
+                    print(data)
                     # Vide le tableau avant d'insérer les nouvelles données
                     for row in data:
                         self.TableListe.delete(*self.TableListe.get_children())
@@ -725,3 +729,66 @@ class Repartitions(CTkFrame):
         self.classe_entry.delete(0, END)
         self.nbrClasse.delete(0, END)
         self.class_combobox.set("")
+
+    def refresh(self):
+        """Appelé depuis main.py à chaque fois qu'on affiche cette vue."""
+        self.reinitialiser_champs()   # vide le formulaire
+        self.getAccepted()            # recharge les élèves acceptés non affectés
+
+        # Rafraîchit aussi le combobox des classes réelles
+        classes = self.Database.getClasseReel()
+        self.classReelCombox.configure(values=classes)
+
+        # Vide le tableau des classes réelles (sera rempli au choix du combobox)
+        self.TableListeClasse.delete(*self.TableListeClasse.get_children())
+        self._start_auto_refresh() 
+    
+
+
+
+     # ─── NOUVELLES MÉTHODES À AJOUTER ────────────────────────────
+
+    def _poll_database(self):
+        """Requête silencieuse : vérifie les deux tableaux sans
+        perturber la sélection ou les champs du formulaire."""
+        if not self.Database.connection:
+            return
+        try:
+            # 1. Vérifie le tableau des élèves acceptés non affectés
+            nouvelles_datas = self.Database.GetEleveAccepted()
+            ids_affiches = {
+                self.TableListe.item(i, "values")[0]
+                for i in self.TableListe.get_children()
+            }
+            ids_bdd = {str(row[0]) for row in nouvelles_datas} if nouvelles_datas else set()
+
+            if ids_affiches != ids_bdd:
+                self.TableListe.delete(*self.TableListe.get_children())
+                if nouvelles_datas:
+                    for row in nouvelles_datas:
+                        self.TableListe.insert("", END, values=row)
+
+            # 2. Vérifie si de nouvelles classes réelles sont apparues
+            classes_actuelles = set(self.classReelCombox.cget("values"))
+            classes_bdd = set(self.Database.getClasseReel())
+            if classes_actuelles != classes_bdd:
+                self.classReelCombox.configure(values=list(classes_bdd))
+
+        except Exception:
+            pass  # Silencieux
+
+    def _start_auto_refresh(self):
+        """Démarre le polling (appelé quand la vue devient visible)."""
+        self._stop_auto_refresh()
+        self._auto_refresh()
+
+    def _auto_refresh(self):
+        """Boucle : interroge la BDD puis se replanifie dans 10 s."""
+        self._poll_database()
+        self._refresh_job = self.after(10000, self._auto_refresh)
+
+    def _stop_auto_refresh(self):
+        """Stoppe le polling (appelé quand la vue est cachée)."""
+        if self._refresh_job is not None:
+            self.after_cancel(self._refresh_job)
+            self._refresh_job = None

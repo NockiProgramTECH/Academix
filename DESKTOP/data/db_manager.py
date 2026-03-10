@@ -57,10 +57,11 @@ class DbManager:
         """
         try:
             with self.connection.cursor() as cursor:
-                cursor.execute("""  SELECT id,matricule, nom,prenom,date_naissance,adresse,classe FROM Inscriptions_eleve WHERE statut = 'ACCEPTED' AND classe_reelle ='' """ )
+                cursor.execute("""SELECT id,matricule, nom,prenom,date_naissance,adresse,classe FROM Inscriptions_eleve WHERE statut = 'ACCEPTED' AND classe_reelle is NULL """ )
                 data =cursor.fetchall()
+                print("Donner colercter",data)
                 if data:
-                    print(data)
+                    
                     return data
                 else:
                     return None
@@ -172,9 +173,9 @@ class DbManager:
                     cursor.execute("SELECT nom_classe FROM Classes")
                     rows = cursor.fetchall()
                     print("Classes réelles obtenues :", rows)  # Debug: afficher les classes réelles obtenues
-                    return [row[0] for row in rows] if rows else None
+                    return [row[0] for row in rows] if rows else []
             else:
-                 return None
+                 return []
         except Exception as e :
               messagebox.showerror("Erreur",f"Erreur lors de l'obtention du fichier : {e}")
     

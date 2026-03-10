@@ -10,7 +10,7 @@ from django.core.files.base import ContentFile
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'AcademixWeb.settings')  # Remplacez par le nom de votre projet
 django.setup()
 
-from Inscriptions.models import *  # Remplacez 'votre_app' par le nom de votre application
+from WEB.Inscriptions.models import *  # Remplacez 'votre_app' par le nom de votre application
 
 fake = Faker('fr_FR')  # Utilisation de la locale française
 

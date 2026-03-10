@@ -27,6 +27,7 @@ class Acceuil(CTk):
         self.Database =DbManager()
 
 
+
         self.images ={}
 
 
@@ -46,6 +47,7 @@ class Acceuil(CTk):
         self.notificationLabel =CTkButton(header,image =self.images['notification_icon'],text="0",font=("goudy old style",30,"bold"),fg_color=PRIMARY_BLUE,text_color="red")
         self.notificationLabel.pack(side =RIGHT,padx =20)
         self.showNotifications()
+        self.after(500,self.showNotifications())
 
 
 
@@ -85,64 +87,93 @@ class Acceuil(CTk):
            btn.pack(fill=X,pady=5,padx=10,)
 
 
-        # =====================================================
-        # PRE-CREATION DES VUES (Optimisation performance)
-        # =====================================================
-        # Toutes les vues sont créées au démarrage mais cachées
-        # Elles seront affichées au clic sur les boutons
+
+    # =====================================================
+    # PRE-CREATION DES VUES (Optimisation performance)
+    # =====================================================
+    # Toutes les vues sont créées UNE SEULE FOIS au démarrage
+    # puis cachées. On les affiche/cache sans les recréer.
+    # Les données sont rechargées via refresh() à chaque affichage.
+
         self.views = {}
-        
-        # Pré-créer la vue eleves (la plus utilisée)
+        self.current_view = None  # Aucune vue active au départ
+
+        # Création de toutes les vues (cachées par défaut)
         self._create_eleve_view()
-        
-        # Pré-créer placeholder pour les autres vues (à compléter)
-        self.views["repartitions"] = self._create_repartitions_view()
-        
-        # Afficher la vue d'accueil par défaut (eleve)
-        self.current_view = "eleve"
-        # Afficher la vue EleveView au démarrage
-        self.views["eleve"].pack(fill=BOTH, expand=True)
+        self._create_repartitions_view()
+
+        # Afficher la vue par défaut au lancement
+        self.show_view("eleve")
+
 
     def _create_eleve_view(self):
-        """Pré-créer la vue eleves"""
+        """Crée la vue EleveView et la stocke dans self.views.
+        Elle est cachée immédiatement après création.
+        Les données seront chargées lors du premier show_view("eleve").
+        """
         from views.eleves import EleveView
         eleve_view = EleveView(self.mainFrame)
-        eleve_view.pack(fill=BOTH, expand=True)
-        # Cacher initialement
-        eleve_view.pack_forget()
+        eleve_view.pack_forget()  # Cachée par défaut
         self.views["eleve"] = eleve_view
 
+
     def _create_repartitions_view(self):
+        """Crée la vue Repartitions et la stocke dans self.views.
+        Elle est cachée immédiatement après création.
+        Les données seront chargées lors du premier show_view("repartitions").
+        """
         from views.repartitions import Repartitions
         repartitions_view = Repartitions(self.mainFrame)
-        repartitions_view.pack(fill=BOTH, expand=True)
-        # Cacher initialement
-        repartitions_view.pack_forget()
+        repartitions_view.pack_forget()  # Cachée par défaut
         self.views["repartitions"] = repartitions_view
-        return repartitions_view
 
+    def show_view(self, view_name: str):
+        """Affiche une vue et recharge ses données via refresh().
 
-    def show_view(self, view_name):
-        """Afficher une vue spécifique en cachant les autres"""
-        # Vérifier si la vue existe
+        Workflow :
+            1. Vérifie que la vue demandée existe
+            2. Stoppe le polling de la vue quittée
+            3. Cache la vue actuellement affichée
+            4. Affiche la nouvelle vue
+            5. Appelle refresh() qui démarre le polling de la nouvelle vue
+
+        Args:
+            view_name (str): Clé de la vue à afficher ("eleve", "repartitions", ...)
+        """
+        # Sécurité : la clé doit exister dans le dictionnaire
         if view_name not in self.views:
+            print(f"[WARN] Vue introuvable : '{view_name}'")
             return
-        
-        # Cacher la vue actuelle
+
+        # Cache la vue courante + stoppe son polling
         if self.current_view and self.current_view in self.views:
-            self.views[self.current_view].pack_forget()
-        
-        # Afficher la nouvelle vue
+            vue_quittee = self.views[self.current_view]
+
+            # Stoppe le polling AVANT de cacher la vue
+            if hasattr(vue_quittee, "_stop_auto_refresh"):
+                vue_quittee._stop_auto_refresh()
+
+            vue_quittee.pack_forget()
+
+        # Affiche la nouvelle vue
         self.views[view_name].pack(fill=BOTH, expand=True)
         self.current_view = view_name
-        
-        # Rafraîchir les données si c'est la vue eleves
-        if view_name == "eleve" and hasattr(self.views["eleve"], "refresh"):
-            self.views["eleve"].refresh()
+
+        # refresh() recharge les données ET démarre le polling de la nouvelle vue
+        if hasattr(self.views[view_name], "refresh"):
+            self.views[view_name].refresh()
+        else:
+            print(f"[WARN] La vue '{view_name}' n'a pas de méthode refresh()")
 
     def show_eleve_view(self):
-        """Méthode de compatibilité - redirige vers show_view"""
+        """Raccourci pour afficher la vue inscriptions depuis la sidebar."""
         self.show_view("eleve")
+
+
+    def show_repartitions_view(self):
+        """Raccourci pour afficher la vue répartitions depuis la sidebar."""
+        self.show_view("repartitions")
+
 
     def showNotifications(self):
         """fonction pour afficher le nombre de notifications
