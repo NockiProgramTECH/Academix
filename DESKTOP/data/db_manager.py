@@ -34,7 +34,9 @@ class DbManager:
     def __init__(self):
         self.connection =getConnection()
         self.SetAfecTable()
-    
+        self.createTablesProfesseurs()
+        self.createTableMatiere()
+        self.addMatiere()
 
         #fonction pour rafraichir si il ya de dossier en attente
     def refresh_pending_list(self):
@@ -307,5 +309,306 @@ class DbManager:
             messagebox.showinfo("Succès", f"Répartition terminée : {count} élèves affectés officiellement.")
         except Exception as e:
             messagebox.showerror("Erreur",f"Erreur de connection a la base de donner: {e}")
-            
+    
+        #creation des Tables pour les professeurs et les affectations
 
+    def createTablesProfesseurs(self):
+        """Fonction pour creer les tables des professeurs et des affectations"""
+        try:
+            cursor = self.connection.cursor()
+            # Table des professeurs
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS Professeur (
+                    id_professeur INTEGER PRIMARY KEY AUTO_INCREMENT,
+                    matricule VARCHAR(20) UNIQUE,
+                    nom VARCHAR(50),
+                    prenom VARCHAR(50),
+                    telephone VARCHAR(20),
+                    specialite VARCHAR(100),
+                    statut VARCHAR(20),
+                    email VARCHAR(100),
+                    password VARCHAR(255)
+                )
+            """)
+            # Table des enseignements (affectations)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS Enseignement (
+                    id_enseignement INTEGER PRIMARY KEY AUTO_INCREMENT,
+                    id_professeur INTEGER,
+                    id_matiere INTEGER,
+                    id_classe INTEGER,
+                    FOREIGN KEY(id_professeur) REFERENCES Professeur(id_professeur),
+                    FOREIGN KEY(id_matiere) REFERENCES Matiere(id_matiere),
+                    FOREIGN KEY(id_classe) REFERENCES Classes(id)
+                )
+            """)
+            self.connection.commit()
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors de la création des tables : {e}")
+    
+
+    #Creation de table matiere
+    def createTableMatiere(self):
+        """Fonction pour creer la table des matieres"""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS Matiere (
+                    id_matiere INTEGER PRIMARY KEY AUTO_INCREMENT,
+                    nom_matiere VARCHAR(100) UNIQUE,
+                    coefficient INTEGER
+                )
+            """)
+            self.connection.commit()
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors de la création de la table Matiere : {e}")
+
+
+    def createProfesseur(self,matricule:str,nom:str,prenom:str,telephone:str,specialite:str,statut,email:str):
+        """Fonction pour creer un professeur
+
+        Args:
+            matricule (str): le matricule du professeur
+            nom (str): le nom du professeur
+            prenom (str): le prenom du professeur
+            telephone (str): le numero de telephone du professeur
+            specialite (str): la specialite du professeur
+            statut: le statut du professeur (ex: "ACTIF", "INACTIF")
+            email (str): l'adresse email du professeur
+        """
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                INSERT INTO Professeurs (matricule, nom, prenom, telephone, specialite, statut, email)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (matricule, nom, prenom, telephone, specialite, statut, email))
+            self.connection.commit()
+            messagebox.showinfo("Succès", f"Le professeur {nom} {prenom} a été créé avec succès.")
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors de la création du professeur : {e}")
+
+
+    def _load_professeurs(self):
+        """Fonction pour charger tous les professeurs de la base de données"""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                           SELECT id_professeur, matricule, nom,
+                            prenom, telephone, specialite,
+                            statut, email FROM Professeur
+                           ORDER BY nom,prenom
+                           """
+                           )
+            professeurs = cursor.fetchall()
+            cursor.close()
+            return professeurs if professeurs else []
+          
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors du chargement des professeurs : {e}")
+            return []
+    
+
+
+
+    def _load_affectations(self):
+        """Charge la liste des affectations."""
+        if not self.connection:
+            return
+
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                SELECT e.id_enseignement,
+                       CONCAT(p.nom, ' ', p.prenom) as professeur,
+                       m.nom_matiere,
+                       c.nom_classe
+                FROM Enseignement e
+                JOIN Professeur p ON e.id_professeur = p.id_professeur
+                JOIN Matiere m ON e.id_matiere = m.id_matiere
+                JOIN Classes c ON e.id_classe = c.id
+                ORDER BY c.nom_classe, m.nom_matiere
+            """)
+            data = cursor.fetchall()
+            cursor.close()
+            return data
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors du chargement des affectations : {e}")
+            return []
+        
+    
+    def _load_classes(self):
+        """Charge la liste des classes pour le combobox."""
+        if not self.connection:
+            return
+
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("SELECT nom_classe FROM Classes ORDER BY nom_classe")
+            data = cursor.fetchall()
+            cursor.close()
+            return data
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors du chargement des classes : {e}")
+            return []
+    
+
+
+    def _load_matieres(self):
+        """Charge la liste des matières pour le combobox."""
+        if not self.connection:
+            return
+
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("SELECT nom_matiere FROM Matiere ORDER BY nom_matiere")
+            data = cursor.fetchall()
+            cursor.close()
+            return data
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors du chargement des matières : {e}")
+            return []
+        
+    
+
+    
+    def _add_professeur(self,matricule:str,nom:str,prenom:str,telephone:str,specialite:str,statut:str,email:str):
+
+        """
+        Ajoute un nouveau professeur dans la base de données.
+        L'email et le password sont optionnels (peuvent être NULL).
+        Args:
+            matricule (str): Le matricule unique du professeur (obligatoire)
+            nom (str): Le nom du professeur (obligatoire)
+            prenom (str): Le prénom du professeur (obligatoire)
+            telephone (str): Le numéro de téléphone du professeur (optionnel)
+            specialite (str): La spécialité du professeur (optionnel)
+            statut (str): Le statut du professeur, ex: "ACTIF" ou "INACTIF" (obligatoire)
+            email (str): L'adresse email du professeur (optionnel)
+
+        """
+
+        try:
+            cursor = self.connection.cursor()
+
+            # Vérifier si le matricule existe déjà
+            cursor.execute("SELECT id_professeur FROM Professeur WHERE matricule = %s",
+                          (matricule,))
+            if cursor.fetchone():
+                messagebox.showerror("Erreur", "Ce matricule existe déjà.")
+                cursor.close()
+                return
+
+            # Insertion du nouveau professeur
+            query = """
+                INSERT INTO Professeur 
+                (matricule, nom, prenom, telephone, specialite, statut, email, password)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            values = (
+                matricule,
+                nom,
+                prenom,
+                telephone or None,
+                specialite or None,
+                statut,
+                email or None,
+                None  # password laissé NULL
+            )
+            cursor.execute(query, values)
+            self.connection.commit()
+            cursor.close()
+
+            messagebox.showinfo("Succès", "Professeur ajouté avec succès!")
+
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Impossible d'ajouter le professeur: {e}")
+
+    def _update_professeur(self,id:str,matricule:str,nom:str,prenom:str,telephone:str,specialite:str,statut:str,email:str):
+        """
+        Modifie les informations d'un professeur existant.
+        """
+
+        try:
+            cursor = self.connection.cursor()
+
+            query = """
+                UPDATE Professeur 
+                SET matricule = %s, nom = %s, prenom = %s, telephone = %s,
+                    specialite = %s, statut = %s, email = %s
+                WHERE id_professeur = %s
+            """
+            values = (
+                matricule,
+                nom,
+                prenom,
+                telephone or None,
+                specialite or None,
+                statut,
+                email or None,
+                id
+            )
+
+            cursor.execute(query, values)
+            self.connection.commit()
+            cursor.close()
+
+            messagebox.showinfo("Succès", "Professeur modifié avec succès!")
+      
+
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Impossible de modifier le professeur: {e}")
+
+    def _delete_professeur(self,id:int,nom:str,prenom:str):
+        """
+        Supprime un professeur après confirmation.
+        """
+
+        try:
+            cursor = self.connection.cursor()
+
+            # Supprimer d'abord les affectations (contrainte FK)
+            cursor.execute("DELETE FROM Enseignement WHERE id_professeur = %s", (id,))
+
+            # Supprimer le professeur
+            cursor.execute("DELETE FROM Professeur WHERE id_professeur = %s", (id,))
+
+            self.connection.commit()
+            cursor.close()
+
+            messagebox.showinfo("Succès", "Professeur supprimé avec succès!")
+    
+
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Impossible de supprimer le professeur: {e}")
+    
+    def addMatiere(self):
+        #liste des matieres et coefficients
+        matiere_liste ={
+            "Mathématiques": 5,
+            "Français": 4,
+            "Anglais": 3,
+            "Histoire-Géographie": 3,
+            "Sciences (SVT)": 4,
+            "Informatique": 2,
+            "Philosophie": 2,
+            'EPS':2,
+            'Espagnole':2,
+            'Allemand':4
+            }
+        if self.connection:
+            try:
+                cursor =self.connection.cursor()
+                for matiere, coeff in matiere_liste.items():
+                    cursor.execute("INSERT IGNORE INTO Matiere (nom_matiere, coefficient) VALUES (%s, %s)", (matiere, coeff))
+                self.connection.commit()
+            
+            except Exception as e:
+                messagebox.showerror("Erreur", f"Erreur lors de l'ajout des matières : {e}")    
+    
+
+    
+
+if __name__ == "__main__":  
+    db_manager = DbManager()
+    # Exemple d'utilisation
+    # db_manager.createProfesseur("MAT123", "Doe", "John", "1234567890", "Mathématiques", "ACTIF", "

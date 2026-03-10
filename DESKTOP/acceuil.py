@@ -73,7 +73,7 @@ class Acceuil(CTk):
 
         CTkLabel(sidebar, text="Tableau de bord", font=FONT_TITLE,
                  fg_color=SIDEBAR_BG, text_color=SIDEBAR_TEXT).pack(pady=20)
-
+      
         # Configuration des boutons de la sidebar
         # Pour ajouter une nouvelle vue : ajouter une entrée ici + _create_*_view()
         BTN = {
@@ -87,6 +87,12 @@ class Acceuil(CTk):
                 "command": lambda: self.show_view("repartitions"),
                 "image":   ""
             },
+
+             3: {  # ← NOUVEAU BOUTON
+        "text":    "Gestion Des Professeurs",
+        "command": lambda: self.show_view("professeurs"),
+        "image":   ""
+    },
         }
 
         for _, value in BTN.items():
@@ -114,6 +120,7 @@ class Acceuil(CTk):
         # ══════════════════════════════════════════════════════════════════════
         self._create_eleve_view()
         self._create_repartitions_view()
+        self._create_professeurs_view()
 
         # ── Démarrage ─────────────────────────────────────────────────────────
         # Affiche la vue par défaut au lancement
@@ -146,7 +153,22 @@ class Acceuil(CTk):
         view = Repartitions(self.mainFrame)
         view.pack_forget()
         self.views["repartitions"] = view
+    
 
+    # Dans la section de pré-création des vues (vers la ligne 100 environ), ajoutez :
+
+    def _create_professeurs_view(self):
+        """Instancie ProfesseursView dans mainFrame et la cache immédiatement."""
+        from views.professeurs import ProfesseursView
+        view = ProfesseursView(self.mainFrame)
+        view.pack_forget()
+        self.views["professeurs"] = view
+
+    # Et ajoutez cette ligne dans le __init__ après les autres _create_*_view :
+
+    # Ajoutez aussi le raccourci (optionnel) :
+
+    
     # ══════════════════════════════════════════════════════════════════════════
     # NAVIGATION ENTRE LES VUES
     # ══════════════════════════════════════════════════════════════════════════
@@ -197,11 +219,14 @@ class Acceuil(CTk):
 
     def show_repartitions_view(self):
         self.show_view("repartitions")
+    
+
+    def show_professeurs_view(self):
+        self.show_view("professeurs")
 
     # ══════════════════════════════════════════════════════════════════════════
     # BADGE NOTIFICATIONS
-    # ══════════════════════════════════════════════════════════════════════════
-
+    # ════════════════════════════════════
     def showNotifications(self):
         """Met à jour le badge avec le nombre de dossiers EN_ATTENTE.
         Silencieux : pas de popup si la requête échoue.
@@ -228,7 +253,8 @@ class Acceuil(CTk):
         if self._notif_job is not None:
             self.after_cancel(self._notif_job)
             self._notif_job = None
-
+    
+      
     # ══════════════════════════════════════════════════════════════════════════
     # FERMETURE PROPRE
     # ══════════════════════════════════════════════════════════════════════════
