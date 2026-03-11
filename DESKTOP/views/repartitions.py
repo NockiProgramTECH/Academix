@@ -1,15 +1,13 @@
 """
 Module Repartitions — Affectation des élèves acceptés dans des classes réelles.
 
-Séparation claire :
-  __init__         → construction des widgets UNIQUEMENT
-  refresh()        → vide + requêtes SQL + remplit (appelé par main.py)
-  _poll_database() → polling silencieux toutes les 10 s
+CORRECTIONS APPLIQUÉES :
+  1. Accepte db= en paramètre (instance partagée depuis Acceuil)
+  2. refresh() vide systématiquement les deux Treeviews avant toute requête SQL
+  3. _start_auto_refresh() annule le job précédent → pas de doublons de polling
 
 Pourquoi pas asyncio ?
   Même raison que EleveView : Tkinter n'est pas thread-safe.
-  after() de Tkinter est la bonne solution — il s'exécute dans la boucle
-  principale, sans conflit, sans import supplémentaire.
 """
 
 import time
@@ -21,16 +19,18 @@ from data.db_manager import DbManager
 
 class Repartitions(CTkFrame):
 
-    def __init__(self, master, *args, **kwargs):
+    # CORRECTION 1 : accepte db= (instance partagée) en paramètre optionnel
+    def __init__(self, master, db: DbManager = None, *args, **kwargs):
         super().__init__(master, *args, **kwargs)
         self.master   = master
-        self.Database = DbManager()
+
+        # CORRECTION 1 : utilise l'instance partagée si fournie
+        self.Database = db if db is not None else DbManager()
+
         self.configure(fg_color=BACKGROUND_LIGHT)
 
-        # ── Référence au job after() pour le polling ──────────────────────────
         self._refresh_job = None
 
-        # ── Variables Tkinter ─────────────────────────────────────────────────
         self.niveau_var         = StringVar()
         self.search_var         = StringVar()
         self.typesearch_var     = StringVar()
@@ -44,27 +44,23 @@ class Repartitions(CTkFrame):
         self.classe_var         = StringVar()
         self.classrel_var       = StringVar()
 
-        # ── Menus contextuels ─────────────────────────────────────────────────
         self.menu_treeC = Menu(self, tearoff=0)
         self.menu_treeC.add_command(label="Voir détails",  command=self.voir_details)
         self.menu_treeC.add_command(label="Modifier",      command=self.modifier_eleve)
         self.menu_treeC.add_command(label="Supprimer",     command=self.supprimer_eleve)
 
-        # Menu contextuel dynamique (rempli selon le niveau de l'élève)
         self.menu_treeL = Menu(self, tearoff=0)
 
         # ══════════════════════════════════════════════════════════════════════
         # CONSTRUCTION DES WIDGETS  (aucune requête SQL ici)
         # ══════════════════════════════════════════════════════════════════════
 
-        # ── Conteneur HAUT (deux colonnes égales) ─────────────────────────────
         frameHaut = CTkFrame(self, fg_color="transparent")
         frameHaut.pack(side=TOP, fill=BOTH, expand=True, padx=5, pady=(10, 5))
         frameHaut.grid_columnconfigure(0, weight=1, uniform="g1")
         frameHaut.grid_columnconfigure(1, weight=1, uniform="g1")
         frameHaut.grid_rowconfigure(0, weight=1)
 
-        # ── Colonne gauche : formulaire d'affectation ─────────────────────────
         frameAction = CTkFrame(frameHaut, fg_color=BACKGROUND_LIGHT,
                                border_width=1, border_color=PRIMARY_BLUE)
         frameAction.grid(row=0, column=0, sticky="nsew", padx=(0, 2))
@@ -76,7 +72,6 @@ class Repartitions(CTkFrame):
         content_frame = CTkFrame(frameAction, fg_color="transparent")
         content_frame.pack(fill=BOTH, expand=True, padx=10, pady=10)
 
-        # Ligne 1 : Niveau + bouton affectation multiple + entrée nombre de classes
         ligne1 = CTkFrame(content_frame, fg_color="transparent")
         ligne1.pack(fill=X, pady=(5, 10))
 
@@ -103,11 +98,9 @@ class Repartitions(CTkFrame):
         )
         self.nbrClasse.pack(side=LEFT)
 
-        # Séparateur
         CTkFrame(content_frame, height=2, fg_color=PRIMARY_BLUE,
                  corner_radius=0).pack(fill=X, pady=10)
 
-        # Grille formulaire (4 colonnes : label | entry | label | entry)
         form_frame = CTkFrame(content_frame, fg_color="transparent")
         form_frame.pack(fill=BOTH, expand=True)
         for i, w in enumerate([1, 2, 1, 2]):
@@ -132,7 +125,6 @@ class Repartitions(CTkFrame):
         lbl(form_frame, "Adresse:",     2, 0);  self.addresse_entry       = ent(form_frame, self.addresse_var,       "Adresse",     2, 1)
         lbl(form_frame, "Classe:",      2, 2);  self.classe_entry         = ent(form_frame, self.classe_var,         "Classe",      2, 3)
 
-        # Bouton réinitialiser
         buttons_frame = CTkFrame(content_frame, fg_color="transparent")
         buttons_frame.pack(fill=X, pady=(20, 5))
         buttons_frame.grid_columnconfigure(0, weight=1)
@@ -145,7 +137,6 @@ class Repartitions(CTkFrame):
             height=40, corner_radius=8
         ).grid(row=0, column=1, padx=5, pady=5, sticky=EW)
 
-        # ── Colonne droite : tableau des élèves acceptés ───────────────────────
         frameListeAccepted = CTkFrame(frameHaut, fg_color=BACKGROUND_LIGHT,
                                       border_width=1, border_color=PRIMARY_BLUE)
         frameListeAccepted.grid(row=0, column=1, sticky="nsew", padx=(2, 0))
@@ -198,7 +189,6 @@ class Repartitions(CTkFrame):
         xscroll1.grid(row=1, column=0, sticky="ew")
         yscroll1.grid(row=0, column=1, sticky="ns")
 
-        # ── Conteneur BAS : tableau par classe réelle ──────────────────────────
         frame3 = CTkFrame(self, fg_color=BACKGROUND_LIGHT,
                           border_width=1, border_color=PRIMARY_BLUE)
         frame3.pack(side=BOTTOM, fill=BOTH, expand=True, padx=5, pady=(5, 10))
@@ -207,7 +197,6 @@ class Repartitions(CTkFrame):
                  text_color=BACKGROUND_LIGHT, fg_color=PRIMARY_BLUE,
                  anchor=CENTER, height=30).pack(fill=X, side=TOP)
 
-        # Combobox des classes réelles (valeurs chargées dans refresh())
         self.classReelCombox = CTkComboBox(
             frame3, values=["Sélectionner une classe"],
             fg_color=BACKGROUND_LIGHT, text_color=PRIMARY_BLUE,
@@ -247,7 +236,6 @@ class Repartitions(CTkFrame):
         xscroll2.grid(row=1, column=0, sticky="ew")
         yscroll2.grid(row=0, column=1, sticky="ns")
 
-        # ── Indicateur de dernière mise à jour ────────────────────────────────
         self._status_label = CTkLabel(
             self, text="⏳ En attente de données...",
             font=("Arial", 10), text_color="gray", fg_color=BACKGROUND_LIGHT
@@ -259,12 +247,14 @@ class Repartitions(CTkFrame):
     # ══════════════════════════════════════════════════════════════════════════
 
     def getAccepted(self):
-        """Requête SQL + remplissage du Treeview des élèves acceptés non affectés."""
+        """Vide le Treeview + requête SQL fraîche + remplissage.
+        CORRECTION 2 : delete() systématique avant toute insertion.
+        """
         if not self.Database.connection:
             return
         try:
             data = self.Database.GetEleveAccepted()
-            # Vide UNE SEULE FOIS avant la boucle (bug corrigé)
+            # CORRECTION 2 : vider AVANT d'insérer
             self.TableListe.delete(*self.TableListe.get_children())
             if data:
                 for row in data:
@@ -274,36 +264,34 @@ class Repartitions(CTkFrame):
             messagebox.showerror("Erreur", f"Erreur de connexion : {e}")
 
     def refresh(self):
-        """Appelé par main.py quand cette vue devient visible.
-        Vide le formulaire, recharge les deux tableaux et le combobox,
-        puis démarre le polling.
+        """Appelé par Acceuil.show_view() quand cette vue devient visible.
+        CORRECTION 2 : vide les deux tableaux avant toute requête fraîche.
+        CORRECTION 5 : _start_auto_refresh() annule le job précédent.
         """
         self.reinitialiser_champs()
+
+        # CORRECTION 2 : vider les deux Treeviews AVANT les requêtes SQL
+        self.TableListe.delete(*self.TableListe.get_children())
+        self.TableListeClasse.delete(*self.TableListeClasse.get_children())
+
         self.getAccepted()
 
-        # Recharge la liste des classes réelles dans le combobox
         classes = self.Database.getClasseReel()
         self.classReelCombox.configure(
             values=classes if classes else ["Aucune classe"]
         )
-        # Vide le tableau du bas (sera rempli au choix du combobox)
-        self.TableListeClasse.delete(*self.TableListeClasse.get_children())
 
-        self._start_auto_refresh()   # ← démarre la boucle de polling
+        self._start_auto_refresh()
 
     # ══════════════════════════════════════════════════════════════════════════
     # POLLING — rafraîchissement automatique toutes les 10 s
     # ══════════════════════════════════════════════════════════════════════════
 
     def _poll_database(self):
-        """Requête silencieuse : vérifie les deux tableaux et le combobox.
-        Ne rafraîchit QUE si les données ont réellement changé.
-        Ne touche PAS au formulaire ni à la sélection en cours.
-        """
+        """Requête silencieuse : vérifie les deux tableaux et le combobox."""
         if not self.Database.connection:
             return
         try:
-            # ── 1. Tableau des élèves acceptés non affectés ────────────────────
             nouvelles_datas = self.Database.GetEleveAccepted()
             ids_affiches = {
                 self.TableListe.item(i, "values")[0]
@@ -317,7 +305,6 @@ class Repartitions(CTkFrame):
                     for row in nouvelles_datas:
                         self.TableListe.insert("", END, values=row)
 
-            # ── 2. Combobox des classes réelles ───────────────────────────────
             classes_actuelles = set(self.classReelCombox.cget("values"))
             classes_bdd       = set(self.Database.getClasseReel())
             if classes_actuelles != classes_bdd:
@@ -328,16 +315,17 @@ class Repartitions(CTkFrame):
             self._update_status()
 
         except Exception:
-            # Silencieux : pas de popup toutes les 10 s
-            pass
+            pass   # silencieux
 
     def _start_auto_refresh(self):
-        """Démarre le polling. Annule d'abord tout job existant."""
-        self._stop_auto_refresh()
+        """Démarre le polling.
+        CORRECTION 5 : annule toujours le job précédent avant d'en créer un.
+        """
+        self._stop_auto_refresh()   # CORRECTION 5
         self._auto_refresh()
 
     def _auto_refresh(self):
-        """Interroge la BDD puis se replanifie dans 10 secondes (via after)."""
+        """Interroge la BDD puis se replanifie dans 10 secondes."""
         self._poll_database()
         self._refresh_job = self.after(10_000, self._auto_refresh)
 
@@ -379,6 +367,7 @@ class Repartitions(CTkFrame):
         try:
             classe_reel = self.classReelCombox.get()
             data = self.Database.GetEleveByClasse(classe_reel)
+            # CORRECTION 2 : vider avant d'insérer
             self.TableListeClasse.delete(*self.TableListeClasse.get_children())
             if data:
                 for row in data:
@@ -395,9 +384,7 @@ class Repartitions(CTkFrame):
             self.menu_treeC.tk_popup(event.x_root, event.y_root)
 
     def afficher_menu_contextuel(self, event):
-        """Menu contextuel dynamique clic droit sur le tableau des acceptés.
-        Propose d'affecter l'élève dans les classes A/B/C/D de son niveau.
-        """
+        """Menu contextuel dynamique clic droit sur le tableau des acceptés."""
         item_id = self.TableListe.identify_row(event.y)
         if not item_id:
             return
@@ -405,7 +392,7 @@ class Repartitions(CTkFrame):
         self.selected_item = self.TableListe.item(item_id, 'values')
 
         self.menu_treeL.delete(0, END)
-        niveau = self.selected_item[6]   # colonne Classe = niveau (ex: "6eme")
+        niveau = self.selected_item[6]
 
         for lettre in ["A", "B", "C", "D"]:
             nom_classe = f"{niveau} {lettre}"
@@ -435,6 +422,7 @@ class Repartitions(CTkFrame):
 
         if self.Database.connection:
             self.Database.affectation_global(niveau=niveau, nb=nb)
+            # CORRECTION 2 : recharger après écriture
             self.getAccepted()
             self.reinitialiser_champs()
             classes = self.Database.getClasseReel()

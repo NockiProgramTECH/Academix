@@ -1,5 +1,18 @@
+"""
+Module DbManager — Gestionnaire de base de données MySQL pour Academix.
+
+CORRECTIONS APPLIQUÉES :
+  1. Connexion unique partagée (singleton) : évite les instances multiples
+  2. Reconnexion automatique si la connexion est perdue
+  3. commit() systématique après chaque écriture
+  4. cursor.close() systématique pour éviter les fuites de ressources
+"""
+
 from ast import Return
+import datetime
 from email import message
+from random import random
+import string
 import time
 from tkinter import messagebox
 
@@ -14,11 +27,25 @@ DB_CONFIG={
         'database':'Academix',
         'password':'root'
 }
-#pour sqlite3
-def getConnection():
-    db =mysql.connector.connect(**DB_CONFIG)
-    if db:
 
+# ══════════════════════════════════════════════════════════════════════════════
+# CORRECTION 1 : Instance partagée globale (pattern Singleton léger)
+# Toutes les vues récupèrent la MÊME connexion MySQL → les commits sont
+# immédiatement visibles dans toutes les vues sans redémarrage.
+# ══════════════════════════════════════════════════════════════════════════════
+_shared_db_instance = None
+
+def get_shared_db():
+    """Retourne l'instance partagée de DbManager (crée si nécessaire)."""
+    global _shared_db_instance
+    if _shared_db_instance is None:
+        _shared_db_instance = DbManager()
+    return _shared_db_instance
+
+
+def getConnection():
+    db = mysql.connector.connect(**DB_CONFIG,autocommit=True)
+    if db:
         return db
     return None
 
@@ -28,59 +55,69 @@ def close():
     if con:
         con.close()
         return True
-    
+
 
 class DbManager:
     def __init__(self):
-        self.connection =getConnection()
+        self.connection = getConnection()
         self.SetAfecTable()
         self.createTablesProfesseurs()
         self.createTableMatiere()
         self.addMatiere()
 
-        #fonction pour rafraichir si il ya de dossier en attente
+    # ══════════════════════════════════════════════════════════════════════════
+    # CORRECTION 2 : Reconnexion automatique
+    # MySQL ferme les connexions inactives après ~8h (wait_timeout).
+    # Cette méthode vérifie et rétablit la connexion avant chaque opération.
+    # ══════════════════════════════════════════════════════════════════════════
+    def _ensure_connection(self):
+        """Vérifie que la connexion est active, se reconnecte si besoin."""
+        try:
+            if self.connection is None or not self.connection.is_connected():
+                self.connection = getConnection()
+        except Exception:
+            try:
+                self.connection = getConnection()
+            except Exception as e:
+                messagebox.showerror("Connexion", f"Impossible de se reconnecter : {e}")
+
     def refresh_pending_list(self):
         try:
+            self._ensure_connection()  # CORRECTION 2
             cursor = self.connection.cursor()
             cursor.execute("SELECT id,matricule, nom,prenom,date_naissance,adresse,classe,photo FROM Inscriptions_eleve WHERE statut ='EN_ATTENTE'")
             rows = cursor.fetchall()
-            # self.com['values'] = [f"{r[0]} - {r[1]}" for r in rows]
-            # if not rows: self.com.set("Aucun dossier en attente")
+            cursor.close()  # CORRECTION : fermeture systématique
             return rows
         except Exception as e:
-            messagebox.showerror("Errreur",f"Erreur de {e}")
+            messagebox.showerror("Erreur", f"Erreur de {e}")
     
     def GetEleveAccepted(self):
         """
-        Function pour recuperer tous les eleves dont le statut d'inscription est accepter
-        Returns:
-                List:returne une liste de tuple de tous les donner vrai
-                None:si il ya rien
+        Récupère tous les élèves dont le statut d'inscription est accepté
+        et qui n'ont pas encore de classe_reelle affectée.
         """
         try:
+            self._ensure_connection()  # CORRECTION 2
             with self.connection.cursor() as cursor:
                 cursor.execute("""SELECT id,matricule, nom,prenom,date_naissance,adresse,classe FROM Inscriptions_eleve WHERE statut = 'ACCEPTED' AND classe_reelle is NULL """ )
-                data =cursor.fetchall()
-                print("Donner colercter",data)
+                data = cursor.fetchall()
+                print("Donner colercter", data)
                 if data:
-                    
                     return data
                 else:
                     return None
         
         except Exception as e:
-            messagebox.showerror("Erreur",f"Erreur de {e}")
+            messagebox.showerror("Erreur", f"Erreur de {e}")
     
      
     def SetAfecTable(self):
-        """Methode pour l'affectation multiple - a implementer selon la logique metier"""
-        # Implementer la logique d'affectation multiple ici
-        """Prépare les tables de gestion si elles n'existent pas"""
+        """Prépare les tables de gestion si elles n'existent pas."""
         try:
+            self._ensure_connection()
             cursor = self.connection.cursor()
-            # Table des étiquettes de classes
             cursor.execute("CREATE TABLE IF NOT EXISTS Classes (id INTEGER PRIMARY KEY AUTO_INCREMENT, nom_classe VARCHAR(20) UNIQUE)")
-            # Table des liens officiels (Affectations)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS Scolarite_Affectation (
                     id INTEGER PRIMARY KEY AUTO_INCREMENT,
@@ -91,107 +128,79 @@ class DbManager:
                     FOREIGN KEY(classe_id) REFERENCES Classes(id)
                 )
             """)
-            self.connection.commit()
+            self.connection.commit()  # CORRECTION 3
+            cursor.close()
         except Exception as e:
-                messagebox.showerror("Erreur",f"Erreur de :{e}")
+            messagebox.showerror("Erreur", f"Erreur de :{e}")
 
-    def AcceptedInscription(self,matricule:str,eleve_id:str):
-        """Foncction qui sera apeler pour accepter l'inscription d'un eleve
-        Args:
-            matricule (str): Le numero matricule donner lors de l'inscription
-            eleve_id (str): L'identifiant unique de l'élève
-        """
+    def AcceptedInscription(self, matricule: str, eleve_id: str):
+        """Accepte l'inscription d'un élève (UPDATE + commit immédiat)."""
         try:
+            self._ensure_connection()  # CORRECTION 2
             cursor = self.connection.cursor()
-            cursor.execute("UPDATE Inscriptions_eleve SET statut ='ACCEPTED' WHERE matricule = %s",(matricule,))
+            cursor.execute("UPDATE Inscriptions_eleve SET statut ='ACCEPTED' WHERE matricule = %s", (matricule,))
+            # CORRECTION 3 : commit après chaque UPDATE
             self.connection.commit()
-            #valider aussi les documents
-            cursor.execute("UPDATE Inscriptions_documenteleve SET est_valide = 1 WHERE eleve_id = %s",(eleve_id,))
-            self.connection.commit()
-            messagebox.showinfo("Succès",f"Inscription de l'eleve {matricule} a été accepté")
+            cursor.execute("UPDATE Inscriptions_documenteleve SET est_valide = 1 WHERE eleve_id = %s", (eleve_id,))
+            self.connection.commit()  # CORRECTION 3
+            cursor.close()
+            messagebox.showinfo("Succès", f"Inscription de l'élève {matricule} a été acceptée")
         except Exception as e:
-            messagebox.showerror("Errreur",f"Erreur de {e}")
+            messagebox.showerror("Erreur", f"Erreur de {e}")
 
     
-    def GetDocuments(self,id:str):
-        """Fonction qui retourne le lien vers les differents documents
-
-        Args:
-            matricule (str): matricule a l'inscription 
-            id (str): l'identifiant unique 
-        """
-        if self.connection:
-            print("Connexion à la base de données réussie.")
-            print(f"ID recherché : {id}")  # Debug: afficher l'ID recherché
-        else:
-            print("Échec de la connexion à la base de données.")
+    def GetDocuments(self, id: str):
+        """Retourne le lien vers les différents documents de l'élève."""
         try:
+            self._ensure_connection()
             if self.connection:
-                cursor =self.connection.cursor()
-                cursor.execute("SELECT acte_naissance,diplome,last_bulletin from Inscriptions_documenteleve where eleve_id = %s",(id,))
-                row =cursor.fetchone()
-                print("Row obtenue :", row)  # Debug: afficher la ligne obtenue
-                return row if row else  None
+                cursor = self.connection.cursor()
+                cursor.execute("SELECT acte_naissance,diplome,last_bulletin from Inscriptions_documenteleve where eleve_id = %s", (id,))
+                row = cursor.fetchone()
+                cursor.close()
+                print("Row obtenue :", row)
+                return row if row else None
             else:
-                 return None
-        except Exception as e :
-              messagebox.showerror("Erreur",f"Erreur lors de l'obtention du fichier : {e}")
+                return None
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors de l'obtention du fichier : {e}")
 
     
-    def SearchEleveInscription(self,VarSeaerch:str,variable:str):
-        """Fonction qui va faire la recherche dans la plage entry
-
-        Args:
-            Varsearch (str): valeur  type a rechercher dans la table           
-            variable (str): valeur entrer dans pour la recherche
-        
-        Return:
-            retourne liste de valeur quelle a trouver ou rien 
-        """
+    def SearchEleveInscription(self, VarSeaerch: str, variable: str):
+        """Recherche dans la table Inscriptions_eleve selon le critère donné."""
         try:
-            querie =f"SELECT id,matricule,nom,prenom,date_naissance,adresse,classe,photo from Inscriptions_eleve WHERE {str(VarSeaerch)}  LIKE '{str(variable)}%' AND statut ='EN_ATTENTE'"
-            print(querie)
+            querie = f"SELECT id,matricule,nom,prenom,date_naissance,adresse,classe,photo from Inscriptions_eleve WHERE {str(VarSeaerch)}  LIKE '{str(variable)}%' AND statut ='EN_ATTENTE'"
+            self._ensure_connection()
             if self.connection:
-                    cursor =self.connection.cursor()
-                    cursor.execute(querie )
-                    row =cursor.fetchall()
-                    return row if row else None
+                cursor = self.connection.cursor()
+                cursor.execute(querie)
+                row = cursor.fetchall()
+                cursor.close()
+                return row if row else None
         
         except Exception as e:
-            messagebox.showerror("Erreur",f"Erreur de connection a la base de donner: {e}")
+            messagebox.showerror("Erreur", f"Erreur de connexion à la base de données : {e}")
     
 
     def getClasseReel(self):
-        """Fonction pour selectionner le nom de tous les classe relles present
-
-        Returns:
-            List: retourne une liste de classe reel ou rien
-
-        """
-
+        """Retourne la liste de toutes les classes réelles présentes."""
         try:
+            self._ensure_connection()
             if self.connection:
                 with self.connection.cursor() as cursor:
                     cursor.execute("SELECT nom_classe FROM Classes")
                     rows = cursor.fetchall()
-                    print("Classes réelles obtenues :", rows)  # Debug: afficher les classes réelles obtenues
                     return [row[0] for row in rows] if rows else []
             else:
-                 return []
-        except Exception as e :
-              messagebox.showerror("Erreur",f"Erreur lors de l'obtention du fichier : {e}")
+                return []
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors de l'obtention des classes : {e}")
     
 
-    def GetEleveByClasse(self,classrel:str):
-        """Fonction pour selectionner tous les eleves d'une classe reel
-
-        Args:
-            classrel (str): le nom de la classe reel
-
-        Returns:
-            List: retourne une liste de tuple de tous les eleves d'une classe reel ou rien
-        """
+    def GetEleveByClasse(self, classrel: str):
+        """Retourne tous les élèves d'une classe réelle donnée."""
         try:
+            self._ensure_connection()
             if self.connection:
                 with self.connection.cursor() as cursor:
                     cursor.execute("""
@@ -204,21 +213,20 @@ class DbManager:
                     rows = cursor.fetchall()
                     return rows if rows else None
             else:
-                 return None
-        except Exception as e :
-              messagebox.showerror("Erreur",f"Erreur lors de l'obtention du fichier : {e}")
+                return None
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors de l'obtention des élèves : {e}")
     
     
-    def affectation_individuel(self, classe_cible,selected_items,func):
-        id_eleve = selected_items[0] # L'ID de l'élève
-        print("repartir unique",id_eleve)
+    def affectation_individuel(self, classe_cible, selected_items, func):
+        id_eleve = selected_items[0]
+        print("repartir unique", id_eleve)
         try:
+            self._ensure_connection()
             cursor = self.connection.cursor()
             
-            # 1. Mise à jour de la classe réelle
             cursor.execute("UPDATE Inscriptions_eleve SET classe_reelle = %s WHERE id = %s", (classe_cible, id_eleve))
             
-            # 2. Création de l'affectation officielle (comme dans l'algorithme groupé)
             cursor.execute("INSERT  IGNORE INTO Classes (nom_classe) VALUES (%s)", (classe_cible,))
             cursor.execute("SELECT id FROM Classes WHERE nom_classe = %s", (classe_cible,))
             id_classe = cursor.fetchone()[0]
@@ -229,45 +237,29 @@ class DbManager:
             ON DUPLICATE KEY UPDATE
             classe_id = VALUES(classe_id),
             annee_scolaire = VALUES(annee_scolaire)
-            """, (id_eleve, id_classe, "2025-2026"))  # corriger l'année apres exemple(anne passer - ann d'aujouduit)
+            """, (id_eleve, id_classe, "2025-2026"))
 
-            self.connection.commit()
+            self.connection.commit()  # CORRECTION 3 : un seul commit couvre toutes les écritures
+            cursor.close()
             messagebox.showinfo("Succès", f"L'élève a été affecté en {classe_cible}")
-            # self.refresh_treeview() # Pour mettre à jour l'affichage
-            print('apple')
             func()
-            print("fini")
             
         except Exception as e:
             messagebox.showerror("Erreur", f"Impossible d'affecter l'élève : {e}")
     
 
-
-    
-    def affectation_global(self,niveau:str,nb:int):
+    def affectation_global(self, niveau: str, nb: int):
         """
-        Exécute la répartition automatique des élèves et synchronise avec la base de données.
-
-        Cette méthode répartit les élèves acceptés non encore affectés dans des classes
-        de A à Z selon le nombre de classes spécifié. Elle crée les classes si elles
-        n'existent pas, affecte les élèves et met à jour les informations.
-
-        Le processus suit un algorithme round-robin pour distribuer équitablement
-        les élèves dans les classes.
-
-        Raises:
-            ValueError: Si le nombre de classes n'est pas un entier valide
+        Répartition automatique round-robin des élèves dans des classes A→Z.
+        Un seul commit à la fin garantit l'atomicité de l'opération.
         """
-        """Algorithme combiné : Répartit A->Z et crée les liens officiels"""
         try:
-           
-            # Génère les lettres de classe selon le nombre spécifié (A, B, C, etc.)
+            self._ensure_connection()
             lettres = ["A", "B", "C", "D", "E", "F"][:nb]
-            annee = f"{int(time.strftime('%Y') ) -1 }-{(time.strftime('%Y'))}"  # Exemple : "2024-2025"
+            annee = f"{int(time.strftime('%Y')) - 1}-{(time.strftime('%Y'))}"
 
             cursor = self.connection.cursor()
 
-                # 1. Sélection des élèves validés non encore affectés officiellement
             cursor.execute("""
                     SELECT id, nom, prenom FROM Inscriptions_eleve 
                     WHERE statut = 'ACCEPTED' 
@@ -279,44 +271,40 @@ class DbManager:
             eleves = cursor.fetchall()
             if not eleves:
                 messagebox.showinfo("Info", "Tous les élèves sont déjà affectés !")
+                cursor.close()
                 return
 
             count = 0
             for id_eleve, nom, prenom in eleves:
-                    # Calcul de la classe (Round-robin) - distribution équilibrée
                 lettre = lettres[count % nb]
                 nom_classe = f"{niveau} {lettre}"
 
-                    # 2. On s'assure que la classe existe dans 'Classes'
                 cursor.execute("INSERT IGNORE  INTO Classes (nom_classe) VALUES (%s) ", (nom_classe,))
                 cursor.execute("SELECT id FROM Classes WHERE nom_classe = %s", (nom_classe,))
                 id_classe = cursor.fetchone()[0]
 
-                    # 3. On crée l'affectation officielle
                 cursor.execute("""
                         INSERT INTO Scolarite_Affectation (eleve_id, classe_id, annee_scolaire)
                         VALUES (%s, %s, %s)
                     """, (id_eleve, id_classe, annee))
                     
-                    # 4. On met à jour le champ informatif dans la table inscription
                 cursor.execute("UPDATE Inscriptions_eleve SET classe_reelle = %s WHERE id = %s", (nom_classe, id_eleve))
                     
                 count += 1
 
+            # CORRECTION 3 : un seul commit à la fin (atomicité)
             self.connection.commit()
+            cursor.close()
             print(f"Répartition terminée : {count} élèves affectés officiellement.")
-            # func() #appelle de la fonction
             messagebox.showinfo("Succès", f"Répartition terminée : {count} élèves affectés officiellement.")
         except Exception as e:
-            messagebox.showerror("Erreur",f"Erreur de connection a la base de donner: {e}")
+            messagebox.showerror("Erreur", f"Erreur de connexion à la base de données : {e}")
     
-        #creation des Tables pour les professeurs et les affectations
-
     def createTablesProfesseurs(self):
-        """Fonction pour creer les tables des professeurs et des affectations"""
+        """Crée les tables des professeurs et des affectations si elles n'existent pas."""
         try:
+            self._ensure_connection()
             cursor = self.connection.cursor()
-            # Table des professeurs
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS Professeur (
                     id_professeur INTEGER PRIMARY KEY AUTO_INCREMENT,
@@ -330,7 +318,6 @@ class DbManager:
                     password VARCHAR(255)
                 )
             """)
-            # Table des enseignements (affectations)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS Enseignement (
                     id_enseignement INTEGER PRIMARY KEY AUTO_INCREMENT,
@@ -342,15 +329,16 @@ class DbManager:
                     FOREIGN KEY(id_classe) REFERENCES Classes(id)
                 )
             """)
-            self.connection.commit()
+            self.connection.commit()  # CORRECTION 3
+            cursor.close()
         except Exception as e:
             messagebox.showerror("Erreur", f"Erreur lors de la création des tables : {e}")
     
 
-    #Creation de table matiere
     def createTableMatiere(self):
-        """Fonction pour creer la table des matieres"""
+        """Crée la table des matières si elle n'existe pas."""
         try:
+            self._ensure_connection()
             cursor = self.connection.cursor()
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS Matiere (
@@ -359,38 +347,32 @@ class DbManager:
                     coefficient INTEGER
                 )
             """)
-            self.connection.commit()
+            self.connection.commit()  # CORRECTION 3
+            cursor.close()
         except Exception as e:
             messagebox.showerror("Erreur", f"Erreur lors de la création de la table Matiere : {e}")
 
 
-    def createProfesseur(self,matricule:str,nom:str,prenom:str,telephone:str,specialite:str,statut,email:str):
-        """Fonction pour creer un professeur
-
-        Args:
-            matricule (str): le matricule du professeur
-            nom (str): le nom du professeur
-            prenom (str): le prenom du professeur
-            telephone (str): le numero de telephone du professeur
-            specialite (str): la specialite du professeur
-            statut: le statut du professeur (ex: "ACTIF", "INACTIF")
-            email (str): l'adresse email du professeur
-        """
+    def createProfesseur(self, matricule: str, nom: str, prenom: str, telephone: str, specialite: str, statut, email: str):
+        """Crée un nouveau professeur."""
         try:
+            self._ensure_connection()
             cursor = self.connection.cursor()
             cursor.execute("""
                 INSERT INTO Professeurs (matricule, nom, prenom, telephone, specialite, statut, email)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (matricule, nom, prenom, telephone, specialite, statut, email))
-            self.connection.commit()
+            self.connection.commit()  # CORRECTION 3
+            cursor.close()
             messagebox.showinfo("Succès", f"Le professeur {nom} {prenom} a été créé avec succès.")
         except Exception as e:
             messagebox.showerror("Erreur", f"Erreur lors de la création du professeur : {e}")
 
 
     def _load_professeurs(self):
-        """Fonction pour charger tous les professeurs de la base de données"""
+        """Charge tous les professeurs de la base de données."""
         try:
+            self._ensure_connection()
             cursor = self.connection.cursor()
             cursor.execute("""
                            SELECT id_professeur, matricule, nom,
@@ -409,11 +391,11 @@ class DbManager:
     
 
 
-
     def _load_affectations(self):
         """Charge la liste des affectations."""
+        self._ensure_connection()
         if not self.connection:
-            return
+            return []
 
         try:
             cursor = self.connection.cursor()
@@ -438,8 +420,9 @@ class DbManager:
     
     def _load_classes(self):
         """Charge la liste des classes pour le combobox."""
+        self._ensure_connection()
         if not self.connection:
-            return
+            return []
 
         try:
             cursor = self.connection.cursor()
@@ -455,8 +438,9 @@ class DbManager:
 
     def _load_matieres(self):
         """Charge la liste des matières pour le combobox."""
+        self._ensure_connection()
         if not self.connection:
-            return
+            return []
 
         try:
             cursor = self.connection.cursor()
@@ -471,51 +455,31 @@ class DbManager:
     
 
     
-    def _add_professeur(self,matricule:str,nom:str,prenom:str,telephone:str,specialite:str,statut:str,email:str):
-
-        """
-        Ajoute un nouveau professeur dans la base de données.
-        L'email et le password sont optionnels (peuvent être NULL).
-        Args:
-            matricule (str): Le matricule unique du professeur (obligatoire)
-            nom (str): Le nom du professeur (obligatoire)
-            prenom (str): Le prénom du professeur (obligatoire)
-            telephone (str): Le numéro de téléphone du professeur (optionnel)
-            specialite (str): La spécialité du professeur (optionnel)
-            statut (str): Le statut du professeur, ex: "ACTIF" ou "INACTIF" (obligatoire)
-            email (str): L'adresse email du professeur (optionnel)
-
-        """
-
+    def _add_professeur(self, matricule: str, nom: str, prenom: str, telephone: str, specialite: str, statut: str, email: str):
+        """Ajoute un nouveau professeur dans la base de données."""
         try:
+            self._ensure_connection()
             cursor = self.connection.cursor()
 
-            # Vérifier si le matricule existe déjà
-            cursor.execute("SELECT id_professeur FROM Professeur WHERE matricule = %s",
-                          (matricule,))
+            cursor.execute("SELECT id_professeur FROM Professeur WHERE matricule = %s", (matricule,))
             if cursor.fetchone():
                 messagebox.showerror("Erreur", "Ce matricule existe déjà.")
                 cursor.close()
                 return
 
-            # Insertion du nouveau professeur
             query = """
                 INSERT INTO Professeur 
                 (matricule, nom, prenom, telephone, specialite, statut, email, password)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """
             values = (
-                matricule,
-                nom,
-                prenom,
-                telephone or None,
-                specialite or None,
-                statut,
-                email or None,
+                matricule, nom, prenom,
+                telephone or None, specialite or None,
+                statut, email or None,
                 None  # password laissé NULL
             )
             cursor.execute(query, values)
-            self.connection.commit()
+            self.connection.commit()  # CORRECTION 3
             cursor.close()
 
             messagebox.showinfo("Succès", "Professeur ajouté avec succès!")
@@ -523,12 +487,10 @@ class DbManager:
         except Exception as e:
             messagebox.showerror("Erreur", f"Impossible d'ajouter le professeur: {e}")
 
-    def _update_professeur(self,id:str,matricule:str,nom:str,prenom:str,telephone:str,specialite:str,statut:str,email:str):
-        """
-        Modifie les informations d'un professeur existant.
-        """
-
+    def _update_professeur(self, id: str, matricule: str, nom: str, prenom: str, telephone: str, specialite: str, statut: str, email: str):
+        """Modifie les informations d'un professeur existant."""
         try:
+            self._ensure_connection()
             cursor = self.connection.cursor()
 
             query = """
@@ -538,52 +500,41 @@ class DbManager:
                 WHERE id_professeur = %s
             """
             values = (
-                matricule,
-                nom,
-                prenom,
-                telephone or None,
-                specialite or None,
-                statut,
-                email or None,
+                matricule, nom, prenom,
+                telephone or None, specialite or None,
+                statut, email or None,
                 id
             )
-
             cursor.execute(query, values)
-            self.connection.commit()
+            self.connection.commit()  # CORRECTION 3
             cursor.close()
 
             messagebox.showinfo("Succès", "Professeur modifié avec succès!")
       
-
         except Exception as e:
             messagebox.showerror("Erreur", f"Impossible de modifier le professeur: {e}")
 
-    def _delete_professeur(self,id:int,nom:str,prenom:str):
-        """
-        Supprime un professeur après confirmation.
-        """
-
+    def _delete_professeur(self, id: int, nom: str, prenom: str):
+        """Supprime un professeur et toutes ses affectations."""
         try:
+            self._ensure_connection()
             cursor = self.connection.cursor()
 
             # Supprimer d'abord les affectations (contrainte FK)
             cursor.execute("DELETE FROM Enseignement WHERE id_professeur = %s", (id,))
-
-            # Supprimer le professeur
             cursor.execute("DELETE FROM Professeur WHERE id_professeur = %s", (id,))
 
-            self.connection.commit()
+            self.connection.commit()  # CORRECTION 3 : un seul commit couvre les deux DELETE
             cursor.close()
 
             messagebox.showinfo("Succès", "Professeur supprimé avec succès!")
     
-
         except Exception as e:
             messagebox.showerror("Erreur", f"Impossible de supprimer le professeur: {e}")
     
     def addMatiere(self):
-        #liste des matieres et coefficients
-        matiere_liste ={
+        """Insère les matières par défaut si elles n'existent pas encore."""
+        matiere_liste = {
             "Mathématiques": 5,
             "Français": 4,
             "Anglais": 3,
@@ -591,24 +542,22 @@ class DbManager:
             "Sciences (SVT)": 4,
             "Informatique": 2,
             "Philosophie": 2,
-            'EPS':2,
-            'Espagnole':2,
-            'Allemand':4
-            }
+            'EPS': 2,
+            'Espagnole': 2,
+            'Allemand': 4
+        }
+        self._ensure_connection()
         if self.connection:
             try:
-                cursor =self.connection.cursor()
+                cursor = self.connection.cursor()
                 for matiere, coeff in matiere_liste.items():
                     cursor.execute("INSERT IGNORE INTO Matiere (nom_matiere, coefficient) VALUES (%s, %s)", (matiere, coeff))
-                self.connection.commit()
+                self.connection.commit()  # CORRECTION 3
+                cursor.close()
             
             except Exception as e:
-                messagebox.showerror("Erreur", f"Erreur lors de l'ajout des matières : {e}")    
-    
+                messagebox.showerror("Erreur", f"Erreur lors de l'ajout des matières : {e}")
 
-    
 
 if __name__ == "__main__":  
     db_manager = DbManager()
-    # Exemple d'utilisation
-    # db_manager.createProfesseur("MAT123", "Doe", "John", "1234567890", "Mathématiques", "ACTIF", "

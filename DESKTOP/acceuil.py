@@ -1,16 +1,17 @@
 """
 Module Acceuil — Fenêtre principale de l'application Academix.
 
-Rôle :
-  - Construit le header, la sidebar et la zone de contenu.
-  - Pré-crée TOUTES les vues une seule fois au démarrage (perf).
-  - Gère la navigation entre les vues via show_view().
-  - Polling des notifications (badge rouge) toutes les 30 s via after().
+CORRECTIONS APPLIQUÉES :
+  1. Instance DbManager UNIQUE transmise à toutes les vues.
+  2. show_view() appelle refresh() immédiatement après .pack().
+  3. Le polling de notifications EST DÉLÉGUÉ à EleveView.start_global_polling().
+     Acceuil n'a plus son propre _start_notification_polling() car c'est
+     EleveView qui gère le badge directement, via self._notif_label injecté.
+  4. Fermeture propre : stop_global_polling() appelé sur EleveView.
 
-Pourquoi after() et non asyncio/threading pour les notifications ?
-  Tkinter n'est pas thread-safe : modifier un widget depuis un thread
-  secondaire provoque des crashs aléatoires. after() s'exécute dans la
-  boucle principale Tkinter → aucun risque, aucun import supplémentaire.
+Pourquoi after() et non asyncio/threading ?
+  Tkinter n'est pas thread-safe. after() s'exécute dans la boucle principale
+  → aucun risque de crash, aucun import supplémentaire.
 """
 
 import pathlib
@@ -18,7 +19,7 @@ from tkinter import messagebox
 from customtkinter import *
 from utils.constant import *
 from PIL import Image, ImageTk
-from data.db_manager import DbManager
+from data.db_manager import DbManager, get_shared_db
 
 IMAGE_DIR = pathlib.Path(__file__).parent / "images"
 
@@ -29,12 +30,13 @@ class Acceuil(CTk):
         self.geometry(f"{self.winfo_screenwidth()}x{self.winfo_screenheight()}-1+0")
         self.title("Academix")
         self._set_appearance_mode("light")
-        self.Database = DbManager()
 
-        self.images = {}                 # stocke les CTkImage pour éviter le GC
-        self._notif_job  = None          # job after() pour le badge notifications
-        self.views        = {}           # dict {nom: CTkFrame}
-        self.current_view = None         # clé de la vue actuellement affichée
+        # Instance DB partagée entre toutes les vues
+        self.Database = get_shared_db()
+
+        self.images       = {}
+        self.views        = {}
+        self.current_view = None
 
         # ══════════════════════════════════════════════════════════════════════
         # HEADER
@@ -49,7 +51,7 @@ class Acceuil(CTk):
         )
         CTkLabel(header, image=self.images['logo'], text="").pack(side=LEFT, padx=20)
 
-        # Badge notifications (mis à jour toutes les 30 s)
+        # Badge de notifications — mis à jour par EleveView._run_poll() toutes les 30 s
         self.images['notification_icon'] = CTkImage(
             Image.open(IMAGE_DIR / "notification.png"), size=(50, 50)
         )
@@ -73,26 +75,12 @@ class Acceuil(CTk):
 
         CTkLabel(sidebar, text="Tableau de bord", font=FONT_TITLE,
                  fg_color=SIDEBAR_BG, text_color=SIDEBAR_TEXT).pack(pady=20)
-      
-        # Configuration des boutons de la sidebar
-        # Pour ajouter une nouvelle vue : ajouter une entrée ici + _create_*_view()
-        BTN = {
-            1: {
-                "text":    "Gestion Des Élèves",
-                "command": lambda: self.show_view("eleve"),
-                "image":   ""
-            },
-            2: {
-                "text":    "Affectation Par Classe",
-                "command": lambda: self.show_view("repartitions"),
-                "image":   ""
-            },
 
-             3: {  # ← NOUVEAU BOUTON
-        "text":    "Gestion Des Professeurs",
-        "command": lambda: self.show_view("professeurs"),
-        "image":   ""
-    },
+        BTN = {
+            1: {"text": "Gestion Des Élèves",     "command": lambda: self.show_view("eleve")},
+            2: {"text": "Affectation Par Classe",  "command": lambda: self.show_view("repartitions")},
+            3: {"text": "Gestion Des Professeurs", "command": lambda: self.show_view("professeurs")},
+            4: {"text": "💰 Caisse & Scolarité",   "command": lambda: self.show_view("caisse")},
         }
 
         for _, value in BTN.items():
@@ -108,30 +96,37 @@ class Acceuil(CTk):
             ).pack(fill=X, pady=5, padx=10)
 
         # ══════════════════════════════════════════════════════════════════════
-        # ZONE DE CONTENU (à droite de la sidebar)
+        # ZONE DE CONTENU
         # ══════════════════════════════════════════════════════════════════════
         self.mainFrame = CTkFrame(self, fg_color=BACKGROUND_LIGHT,
                                   bg_color=BACKGROUND_LIGHT)
         self.mainFrame.pack(fill=BOTH, side=LEFT, expand=True)
 
         # ══════════════════════════════════════════════════════════════════════
-        # PRÉ-CRÉATION DES VUES (widgets construits UNE SEULE FOIS)
-        # Les données sont chargées par refresh() au premier show_view()
+        # PRÉ-CRÉATION DES VUES
         # ══════════════════════════════════════════════════════════════════════
         self._create_eleve_view()
         self._create_repartitions_view()
         self._create_professeurs_view()
+        # self._create_caisse_view()
 
-        # ── Démarrage ─────────────────────────────────────────────────────────
-        # Affiche la vue par défaut au lancement
+        # ── Injection du label de notifications dans EleveView ────────────────
+        # EleveView._run_poll() met à jour self._notif_label directement,
+        # sans passer par Acceuil. C'est plus propre et ça évite le double polling.
+        self.views["eleve"]._notif_label = self.notificationLabel
+
+        # ── Démarrage du polling global (une seule fois, survit aux nav.) ──────
+        # Ce polling tourne en permanence même quand EleveView est cachée.
+        # Il alimente le badge ET rafraîchit le Treeview si la vue est visible.
+        print("[ACCEUIL] Démarrage du polling global...")
+        self.views["eleve"].start_global_polling()
+        print("[ACCEUIL] Polling démarré.")
+
+        # Affiche la vue par défaut
         self.show_view("eleve")
+        print("[ACCEUIL] Vue eleve affichée.")
 
-        # Démarre le badge de notifications (toutes les 30 s)
-        # Pourquoi 30 s et non 10 s ? Les inscriptions arrivent moins vite
-        # que les changements d'affectation → 30 s est un bon compromis perf/réactivité.
-        self._start_notification_polling()
-
-        # Nettoie proprement les jobs after() à la fermeture de la fenêtre
+        # Fermeture propre
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -139,133 +134,75 @@ class Acceuil(CTk):
     # ══════════════════════════════════════════════════════════════════════════
 
     def _create_eleve_view(self):
-        """Instancie EleveView dans mainFrame et la cache immédiatement.
-        Les données seront chargées au premier show_view('eleve').
-        """
         from views.eleves import EleveView
-        view = EleveView(self.mainFrame)
-        view.pack_forget()          # cachée par défaut
+        view = EleveView(self.mainFrame, db=self.Database)
+        view.pack_forget()
         self.views["eleve"] = view
 
     def _create_repartitions_view(self):
-        """Instancie Repartitions dans mainFrame et la cache immédiatement."""
         from views.repartitions import Repartitions
-        view = Repartitions(self.mainFrame)
+        view = Repartitions(self.mainFrame, db=self.Database)
         view.pack_forget()
         self.views["repartitions"] = view
-    
-
-    # Dans la section de pré-création des vues (vers la ligne 100 environ), ajoutez :
 
     def _create_professeurs_view(self):
-        """Instancie ProfesseursView dans mainFrame et la cache immédiatement."""
         from views.professeurs import ProfesseursView
-        view = ProfesseursView(self.mainFrame)
+        view = ProfesseursView(self.mainFrame, db=self.Database)
         view.pack_forget()
         self.views["professeurs"] = view
 
-    # Et ajoutez cette ligne dans le __init__ après les autres _create_*_view :
+    # def _create_caisse_view(self):
+    #     from caisse import CaisseView
+    #     view = CaisseView(self.mainFrame, db=self.Database)
+    #     view.pack_forget()
+    #     self.views["caisse"] = view
 
-    # Ajoutez aussi le raccourci (optionnel) :
-
-    
     # ══════════════════════════════════════════════════════════════════════════
-    # NAVIGATION ENTRE LES VUES
+    # NAVIGATION
     # ══════════════════════════════════════════════════════════════════════════
 
     def show_view(self, view_name: str):
-        """Affiche une vue et recharge ses données via refresh().
-
-        Workflow :
-          1. Vérifie que la vue existe dans self.views
-          2. Stoppe le polling de la vue quittée  (_stop_auto_refresh)
-          3. Cache la vue courante               (pack_forget)
-          4. Affiche la nouvelle vue             (pack)
-          5. Appelle refresh() → données fraîches + démarre le polling
-
-        Args:
-            view_name: clé dans self.views ("eleve", "repartitions", ...)
-        """
+        """Affiche une vue et recharge ses données via refresh() immédiatement."""
         if view_name not in self.views:
             print(f"[WARN] Vue introuvable : '{view_name}'")
             return
 
-        # ── Quitter la vue actuelle ────────────────────────────────────────────
+        if view_name == self.current_view:
+            return
+
+        # Quitter la vue actuelle
         if self.current_view and self.current_view in self.views:
             vue_quittee = self.views[self.current_view]
-
-            # Stoppe le polling AVANT de cacher → aucune requête inutile en fond
             if hasattr(vue_quittee, "_stop_auto_refresh"):
                 vue_quittee._stop_auto_refresh()
-
             vue_quittee.pack_forget()
 
-        # ── Afficher la nouvelle vue ──────────────────────────────────────────
+        # Afficher la nouvelle vue
         self.views[view_name].pack(fill=BOTH, expand=True)
         self.current_view = view_name
 
-        # ── Recharger les données (refresh démarre aussi le polling) ──────────
+        # Rechargement immédiat
         if hasattr(self.views[view_name], "refresh"):
             self.views[view_name].refresh()
-        else:
-            print(f"[WARN] La vue '{view_name}' n'a pas de méthode refresh()")
 
     # ══════════════════════════════════════════════════════════════════════════
-    # RACCOURCIS (compatibilité avec les anciens appels)
+    # RACCOURCIS
     # ══════════════════════════════════════════════════════════════════════════
 
-    def show_eleve_view(self):
-        self.show_view("eleve")
+    def show_eleve_view(self):        self.show_view("eleve")
+    def show_repartitions_view(self): self.show_view("repartitions")
+    def show_professeurs_view(self):  self.show_view("professeurs")
+    def show_caisse_view(self):       self.show_view("caisse")
 
-    def show_repartitions_view(self):
-        self.show_view("repartitions")
-    
-
-    def show_professeurs_view(self):
-        self.show_view("professeurs")
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # BADGE NOTIFICATIONS
-    # ════════════════════════════════════
-    def showNotifications(self):
-        """Met à jour le badge avec le nombre de dossiers EN_ATTENTE.
-        Silencieux : pas de popup si la requête échoue.
-        """
-        try:
-            if self.Database.connection:
-                data = self.Database.refresh_pending_list()
-                count = len(data) if data else 0
-                # Couleur rouge si dossiers en attente, gris sinon
-                color = "red" if count > 0 else "gray"
-                self.notificationLabel.configure(
-                    text=str(count), text_color=color
-                )
-        except Exception:
-            pass   # silencieux, on réessaiera dans 30 s
-
-    def _start_notification_polling(self):
-        """Démarre le polling des notifications (toutes les 30 s)."""
-        self.showNotifications()         # premier appel immédiat
-        self._notif_job = self.after(30_000, self._start_notification_polling)
-
-    def _stop_notification_polling(self):
-        """Stoppe le polling des notifications."""
-        if self._notif_job is not None:
-            self.after_cancel(self._notif_job)
-            self._notif_job = None
-    
-      
     # ══════════════════════════════════════════════════════════════════════════
     # FERMETURE PROPRE
     # ══════════════════════════════════════════════════════════════════════════
 
     def _on_close(self):
-        """Annule TOUS les jobs after() avant de fermer pour éviter les erreurs
-        'invalid command name' que Tkinter lève quand after() se déclenche
-        après destruction de la fenêtre.
-        """
-        # Stoppe les notifications
-        self._stop_notification_polling()
+        """Arrête tous les jobs after() avant de fermer la fenêtre."""
+        # Stoppe le polling global de notifications
+        if "eleve" in self.views:
+            self.views["eleve"].stop_global_polling()
 
         # Stoppe le polling de la vue active
         if self.current_view and self.current_view in self.views:

@@ -1,7 +1,7 @@
 
 
 #constante pour les couleurs academix
-PRIMARY_BLUE      = "#1F3A5F"   # Bleu académique foncé (sidebar, header)
+PRIMARY_BLUE      = "#4C66DA"   # Bleu académique foncé (sidebar, header)
 SECONDARY_BLUE    = "#2E5C8A"   # Bleu secondaire (boutons sidebar actifs)
 ACCENT_BLUE       = "#3A78C2"   # Accent (hover, sélection)
 

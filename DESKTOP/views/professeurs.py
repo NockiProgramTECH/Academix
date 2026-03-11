@@ -1,12 +1,10 @@
 """
 Module Professeurs — Gestion complète des professeurs et leurs affectations.
 
-Fonctionnalités :
-  - CRUD complet des professeurs
-  - Affectation des professeurs aux classes et matières
-  - Recherche et filtrage
-  - Rafraîchissement automatique toutes les 10 secondes
-  - Menus contextuels pour actions rapides
+CORRECTIONS APPLIQUÉES :
+  1. Accepte db= en paramètre (instance partagée depuis Acceuil)
+  2. refresh() vide systématiquement les Treeviews avant toute requête SQL
+  3. _start_auto_refresh() annule le job précédent → pas de doublons de polling
 """
 
 import datetime
@@ -17,24 +15,19 @@ from data.db_manager import DbManager
 
 
 class ProfesseursView(CTkFrame):
-    """
-    Vue de gestion des professeurs avec :
-    - Formulaire d'ajout/modification
-    - Tableau des professeurs
-    - Interface d'affectation aux classes/matières
-    - Recherche dynamique
-    """
 
-    def __init__(self, master, *args, **kwargs):
+    # CORRECTION 1 : accepte db= (instance partagée) en paramètre optionnel
+    def __init__(self, master, db: DbManager = None, *args, **kwargs):
         super().__init__(master, *args, **kwargs)
         self.master = master
-        self.Database = DbManager()
+
+        # CORRECTION 1 : utilise l'instance partagée si fournie
+        self.Database = db if db is not None else DbManager()
+
         self.configure(fg_color=BACKGROUND_LIGHT)
 
-        # ── Job pour le rafraîchissement automatique ──────────────────────────
         self._refresh_job = None
 
-        # ── Variables Tkinter pour le formulaire professeur ───────────────────
         self.id_var = StringVar()
         self.matricule_var = StringVar()
         self.nom_var = StringVar()
@@ -45,22 +38,15 @@ class ProfesseursView(CTkFrame):
         self.email_var = StringVar()
         self.password_var = StringVar()
 
-        # ── Variables pour la recherche ───────────────────────────────────────
         self.search_var = StringVar()
-        self.search_type_var = StringVar(value="nom")  # nom, prenom, matricule, specialite
+        self.search_type_var = StringVar(value="nom")
 
-        # ── Variables pour l'affectation ──────────────────────────────────────
         self.selected_prof_id = None
         self.selected_prof_nom = None
         self.affectation_classe_var = StringVar()
         self.affectation_matiere_var = StringVar()
 
-        # ── Menus contextuels ─────────────────────────────────────────────────
         self._create_context_menus()
-
-        # ══════════════════════════════════════════════════════════════════════
-        # CONSTRUCTION DE L'INTERFACE
-        # ══════════════════════════════════════════════════════════════════════
 
         # ── Titre de la vue ───────────────────────────────────────────────────
         title_frame = CTkFrame(self, fg_color=PRIMARY_BLUE, height=50, corner_radius=0)
@@ -75,42 +61,31 @@ class ProfesseursView(CTkFrame):
             fg_color=PRIMARY_BLUE
         ).pack(expand=True)
 
-        # ── Conteneur principal à 2 colonnes ──────────────────────────────────
         main_container = CTkFrame(self, fg_color="transparent")
         main_container.pack(fill=BOTH, expand=True, padx=10, pady=10)
 
-        # Configuration des colonnes (60% - 40%)
-        main_container.grid_columnconfigure(0, weight=6)  # Partie gauche (tableaux)
-        main_container.grid_columnconfigure(1, weight=4)  # Partie droite (formulaires)
+        main_container.grid_columnconfigure(0, weight=6)
+        main_container.grid_columnconfigure(1, weight=4)
         main_container.grid_rowconfigure(0, weight=1)
 
-        # ── COLONNE GAUCHE : Tableaux ─────────────────────────────────────────
         left_panel = CTkFrame(main_container, fg_color="transparent")
         left_panel.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        left_panel.grid_rowconfigure(0, weight=2)  # Tableau profs
-        left_panel.grid_rowconfigure(1, weight=3)  # Tableau affectations
+        left_panel.grid_rowconfigure(0, weight=2)
+        left_panel.grid_rowconfigure(1, weight=3)
         left_panel.grid_columnconfigure(0, weight=1)
 
-        # ----- Tableau des professeurs -----
         self._create_professeurs_table(left_panel)
-
-        # ----- Tableau des affectations -----
         self._create_affectations_table(left_panel)
 
-        # ── COLONNE DROITE : Formulaires ──────────────────────────────────────
         right_panel = CTkFrame(main_container, fg_color="transparent")
         right_panel.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        right_panel.grid_rowconfigure(0, weight=1)  # Formulaire prof
-        right_panel.grid_rowconfigure(1, weight=1)  # Formulaire affectation
+        right_panel.grid_rowconfigure(0, weight=1)
+        right_panel.grid_rowconfigure(1, weight=1)
         right_panel.grid_columnconfigure(0, weight=1)
 
-        # ----- Formulaire professeur -----
         self._create_professeur_form(right_panel)
-
-        # ----- Formulaire d'affectation -----
         self._create_affectation_form(right_panel)
 
-        # ── Barre de statut ───────────────────────────────────────────────────
         self._status_label = CTkLabel(
             self,
             text="⏳ En attente de données...",
@@ -125,8 +100,6 @@ class ProfesseursView(CTkFrame):
     # ══════════════════════════════════════════════════════════════════════════
 
     def _create_context_menus(self):
-        """Crée les menus contextuels pour les clics droits."""
-        # Menu pour le tableau des professeurs
         self.menu_prof = Menu(self, tearoff=0)
         self.menu_prof.add_command(label="✏️ Modifier", command=self._edit_selected_prof)
         self.menu_prof.add_command(label="🗑️ Supprimer", command=self._delete_selected_prof)
@@ -134,25 +107,16 @@ class ProfesseursView(CTkFrame):
         self.menu_prof.add_command(label="📋 Voir détails", command=self._show_prof_details)
         self.menu_prof.add_command(label="🔗 Affectations", command=self._show_prof_affectations)
 
-        # Menu pour le tableau des affectations
         self.menu_affect = Menu(self, tearoff=0)
         self.menu_affect.add_command(label="❌ Supprimer affectation", command=self._delete_affectation)
 
     def _create_professeurs_table(self, parent):
-        """
-        Crée le tableau des professeurs avec barre de recherche.
-        
-        Args:
-            parent: Le conteneur parent
-        """
-        # Frame pour le tableau
         table_frame = CTkFrame(parent, fg_color=BACKGROUND_LIGHT,
                                border_width=1, border_color=PRIMARY_BLUE)
         table_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 5))
         table_frame.grid_rowconfigure(1, weight=1)
         table_frame.grid_columnconfigure(0, weight=1)
 
-        # En-tête
         CTkLabel(
             table_frame,
             text="Liste des Professeurs",
@@ -163,12 +127,11 @@ class ProfesseursView(CTkFrame):
             height=30
         ).grid(row=0, column=0, sticky="ew")
 
-        # Barre de recherche
         search_frame = CTkFrame(table_frame, fg_color="transparent")
         search_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
         search_frame.grid_columnconfigure(1, weight=1)
 
-        CTkLabel(search_frame, text="Rechercher:", font=FONT_NORMAL,text_color =PRIMARY_BLUE).grid(row=0, column=0, padx=(0, 5))
+        CTkLabel(search_frame, text="Rechercher:", font=FONT_NORMAL, text_color=PRIMARY_BLUE).grid(row=0, column=0, padx=(0, 5))
 
         self.search_entry = CTkEntry(
             search_frame,
@@ -201,13 +164,11 @@ class ProfesseursView(CTkFrame):
             command=self.refresh
         ).grid(row=0, column=3)
 
-        # Conteneur du Treeview
         tree_container = CTkFrame(table_frame, fg_color="transparent")
         tree_container.grid(row=2, column=0, sticky="nsew", padx=10, pady=(0, 10))
         tree_container.grid_rowconfigure(0, weight=1)
         tree_container.grid_columnconfigure(0, weight=1)
 
-        # Configuration du style
         style = ttk.Style()
         style.theme_use("default")
         style.configure("Treeview.Heading",
@@ -223,11 +184,9 @@ class ProfesseursView(CTkFrame):
                   background=[("selected", ACCENT_BLUE)],
                   foreground=[("selected", "white")])
 
-        # Treeview
         columns = ("id", "matricule", "nom", "prenom", "telephone", "specialite", "statut", "email")
         self.tree_prof = ttk.Treeview(tree_container, columns=columns, show="headings", height=8)
 
-        # Configuration des colonnes
         self.tree_prof.heading("id", text="ID")
         self.tree_prof.heading("matricule", text="Matricule")
         self.tree_prof.heading("nom", text="Nom")
@@ -246,27 +205,18 @@ class ProfesseursView(CTkFrame):
         self.tree_prof.column("statut", width=80, minwidth=60)
         self.tree_prof.column("email", width=150, minwidth=100)
 
-        # Scrollbars
         xscroll = ttk.Scrollbar(tree_container, orient=HORIZONTAL, command=self.tree_prof.xview)
         yscroll = ttk.Scrollbar(tree_container, orient=VERTICAL, command=self.tree_prof.yview)
         self.tree_prof.configure(xscrollcommand=xscroll.set, yscrollcommand=yscroll.set)
 
-        # Bindings
         self.tree_prof.bind("<ButtonRelease-1>", self._on_prof_select)
         self.tree_prof.bind("<Button-3>", self._show_prof_context_menu)
 
-        # Placement
         self.tree_prof.grid(row=0, column=0, sticky="nsew")
         xscroll.grid(row=1, column=0, sticky="ew")
         yscroll.grid(row=0, column=1, sticky="ns")
 
     def _create_affectations_table(self, parent):
-        """
-        Crée le tableau des affectations professeurs-classes-matières.
-        
-        Args:
-            parent: Le conteneur parent
-        """
         table_frame = CTkFrame(parent, fg_color=BACKGROUND_LIGHT,
                                border_width=1, border_color=PRIMARY_BLUE)
         table_frame.grid(row=1, column=0, sticky="nsew", pady=(5, 0))
@@ -312,19 +262,12 @@ class ProfesseursView(CTkFrame):
         yscroll.grid(row=0, column=1, sticky="ns")
 
     def _create_professeur_form(self, parent):
-        """
-        Crée le formulaire d'ajout/modification des professeurs.
-        
-        Args:
-            parent: Le conteneur parent
-        """
         form_frame = CTkFrame(parent, fg_color=BACKGROUND_LIGHT,
                               border_width=1, border_color=PRIMARY_BLUE)
         form_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 5))
         form_frame.grid_rowconfigure(7, weight=1)
         form_frame.grid_columnconfigure(1, weight=1)
 
-        # En-tête
         CTkLabel(
             form_frame,
             text="📝 Formulaire Professeur",
@@ -335,7 +278,6 @@ class ProfesseursView(CTkFrame):
             height=30
         ).grid(row=0, column=0, columnspan=2, sticky="ew")
 
-        # Champs du formulaire
         labels = ["Matricule:", "Nom:", "Prénom:", "Téléphone:", "Spécialité:", "Statut:", "Email:"]
         vars = [self.matricule_var, self.nom_var, self.prenom_var,
                 self.telephone_var, self.specialite_var, self.statut_var, self.email_var]
@@ -346,7 +288,6 @@ class ProfesseursView(CTkFrame):
                      text_color=PRIMARY_BLUE).grid(row=i, column=0, padx=10, pady=5, sticky=W)
 
             if label == "Statut:":
-                # Combobox pour le statut
                 CTkComboBox(
                     form_frame,
                     values=["Permanent", "Vacataire"],
@@ -357,10 +298,8 @@ class ProfesseursView(CTkFrame):
                     width=200,
                     text_color=PRIMARY_BLUE,
                     dropdown_fg_color=FRAME_WHITE,
-                  
                 ).grid(row=i, column=1, padx=10, pady=5, sticky=EW)
             else:
-                # Entry standard
                 CTkEntry(
                     form_frame,
                     placeholder_text=placeholder,
@@ -369,77 +308,48 @@ class ProfesseursView(CTkFrame):
                     fg_color=FRAME_WHITE,
                     border_color=PRIMARY_BLUE,
                     text_color=PRIMARY_BLUE,
-
                 ).grid(row=i, column=1, padx=10, pady=5, sticky=EW)
 
-        # Boutons d'action
         button_frame = CTkFrame(form_frame, fg_color="transparent")
         button_frame.grid(row=8, column=0, columnspan=2, pady=15)
         button_frame.grid_columnconfigure(0, weight=1)
         button_frame.grid_columnconfigure(1, weight=1)
 
         CTkButton(
-            button_frame,
-            text="💾 Ajouter",
-            font=FONT_NORMAL,
-            fg_color=SUCCESS_GREEN,
-            text_color=BACKGROUND_LIGHT,
-            hover_color=PRIMARY_BLUE,
-            command=self.add_professeur,
-            width=120,
-            height=35
+            button_frame, text="💾 Ajouter", font=FONT_NORMAL,
+            fg_color=SUCCESS_GREEN, text_color=BACKGROUND_LIGHT,
+            hover_color=PRIMARY_BLUE, command=self.add_professeur,
+            width=120, height=35
         ).grid(row=0, column=0, padx=5)
 
         CTkButton(
-            button_frame,
-            text="🔄 Modifier",
-            font=FONT_NORMAL,
-            fg_color=WARNING_ORANGE,
-            text_color=BACKGROUND_LIGHT,
-            hover_color=PRIMARY_BLUE,
-            command=self.update_professeur,
-            width=120,
-            height=35
+            button_frame, text="🔄 Modifier", font=FONT_NORMAL,
+            fg_color=WARNING_ORANGE, text_color=BACKGROUND_LIGHT,
+            hover_color=PRIMARY_BLUE, command=self.update_professeur,
+            width=120, height=35
         ).grid(row=0, column=1, padx=5)
 
         CTkButton(
-            button_frame,
-            text="🗑️ Supprimer",
-            font=FONT_NORMAL,
-            fg_color=DANGER_RED,
-            text_color=BACKGROUND_LIGHT,
-            hover_color=PRIMARY_BLUE,
-            command=self.delete_professeur,
-            width=120,
-            height=35
+            button_frame, text="🗑️ Supprimer", font=FONT_NORMAL,
+            fg_color=DANGER_RED, text_color=BACKGROUND_LIGHT,
+            hover_color=PRIMARY_BLUE, command=self.delete_professeur,
+            width=120, height=35
         ).grid(row=1, column=0, padx=5, pady=5)
 
         CTkButton(
-            button_frame,
-            text="🧹 Réinitialiser",
-            font=FONT_NORMAL,
-            fg_color=INFO_GRAY,
-            text_color=BACKGROUND_LIGHT,
-            hover_color=PRIMARY_BLUE,
-            command=self._clear_form,
-            width=120,
-            height=35
+            button_frame, text="🧹 Réinitialiser", font=FONT_NORMAL,
+            fg_color=INFO_GRAY, text_color=BACKGROUND_LIGHT,
+            hover_color=PRIMARY_BLUE, command=self._clear_form,
+            width=120, height=35
         ).grid(row=1, column=1, padx=5, pady=5)
 
     def _create_affectation_form(self, parent):
-        """
-        Crée le formulaire d'affectation des professeurs aux classes et matières.
-        
-        Args:
-            parent: Le conteneur parent
-        """
         form_frame = CTkFrame(parent, fg_color=BACKGROUND_LIGHT,
                               border_width=1, border_color=PRIMARY_BLUE)
         form_frame.grid(row=1, column=0, sticky="nsew", pady=(5, 0))
         form_frame.grid_rowconfigure(4, weight=1)
         form_frame.grid_columnconfigure(1, weight=1)
 
-        # En-tête
         CTkLabel(
             form_frame,
             text="🔗 Affectation Classe/Matière",
@@ -450,7 +360,6 @@ class ProfesseursView(CTkFrame):
             height=30
         ).grid(row=0, column=0, columnspan=2, sticky="ew")
 
-        # Professeur sélectionné
         CTkLabel(form_frame, text="Professeur:", font=FONT_NORMAL,
                  text_color=PRIMARY_BLUE).grid(row=1, column=0, padx=10, pady=5, sticky=W)
 
@@ -463,7 +372,6 @@ class ProfesseursView(CTkFrame):
         )
         self.selected_prof_label.grid(row=1, column=1, padx=10, pady=5, sticky=EW)
 
-        # Classe
         CTkLabel(form_frame, text="Classe:", font=FONT_NORMAL,
                  text_color=PRIMARY_BLUE).grid(row=2, column=0, padx=10, pady=5, sticky=W)
 
@@ -477,7 +385,6 @@ class ProfesseursView(CTkFrame):
         )
         self.classe_combo.grid(row=2, column=1, padx=10, pady=5, sticky=EW)
 
-        # Matière
         CTkLabel(form_frame, text="Matière:", font=FONT_NORMAL,
                  text_color=PRIMARY_BLUE).grid(row=3, column=0, padx=10, pady=5, sticky=W)
 
@@ -491,7 +398,6 @@ class ProfesseursView(CTkFrame):
         )
         self.matiere_combo.grid(row=3, column=1, padx=10, pady=5, sticky=EW)
 
-        # Bouton d'affectation
         CTkButton(
             form_frame,
             text="✅ Enregistrer l'affectation",
@@ -508,10 +414,14 @@ class ProfesseursView(CTkFrame):
     # ══════════════════════════════════════════════════════════════════════════
 
     def refresh(self):
+        """Appelé par Acceuil.show_view() à chaque changement de vue.
+        CORRECTION 2 : vide les Treeviews AVANT les requêtes SQL.
+        CORRECTION 5 : _start_auto_refresh() annule le job précédent.
         """
-        Méthode principale de rafraîchissement appelée par Acceuil.
-        Recharge toutes les données et démarre le polling automatique.
-        """
+        # CORRECTION 2 : vider les tableaux avant de charger les nouvelles données
+        self.tree_prof.delete(*self.tree_prof.get_children())
+        self.tree_affect.delete(*self.tree_affect.get_children())
+
         self.load_professeurs()
         self.load_affectations()
         self.load_classes()
@@ -520,38 +430,35 @@ class ProfesseursView(CTkFrame):
         self._update_status("Données actualisées")
 
     def load_professeurs(self):
-        """Charge la liste des professeurs depuis la base de données."""
+        """Charge la liste des professeurs depuis la base de données.
+        CORRECTION 2 : delete() systématique avant toute insertion.
+        """
         if not self.Database.connection:
             return
-
         try:
-            data =self.Database._load_professeurs()
-            # Vider le tableau
-            for item in self.tree_prof.get_children():
-                self.tree_prof.delete(item)
-            # Remplir avec les nouvelles données
+            data = self.Database._load_professeurs()
+            # CORRECTION 2 : vider avant d'insérer
+            self.tree_prof.delete(*self.tree_prof.get_children())
             if data:
                 for row in data:
                     self.tree_prof.insert("", END, values=row)
-
         except Exception as e:
             print(f"Erreur chargement professeurs: {e}")
             messagebox.showerror("Erreur", f"Impossible de charger les professeurs: {e}")
 
     def load_affectations(self):
-        """Charge la liste des affectations."""
+        """Charge la liste des affectations.
+        CORRECTION 2 : delete() systématique avant toute insertion.
+        """
         if not self.Database.connection:
             return
-
         try:
             data = self.Database._load_affectations()
-            for item in self.tree_affect.get_children():
-                self.tree_affect.delete(item)
-
+            # CORRECTION 2 : vider avant d'insérer
+            self.tree_affect.delete(*self.tree_affect.get_children())
             if data:
                 for row in data:
                     self.tree_affect.insert("", END, values=row)
-
         except Exception as e:
             print(f"Erreur chargement affectations: {e}")
 
@@ -559,13 +466,10 @@ class ProfesseursView(CTkFrame):
         """Charge la liste des classes pour le combobox."""
         if not self.Database.connection:
             return
-
         try:
-            data =self.Database._load_classes()
-        
+            data = self.Database._load_classes()
             classes = [row[0] for row in data] if data else ["Aucune classe"]
             self.classe_combo.configure(values=classes)
-
         except Exception as e:
             print(f"Erreur chargement classes: {e}")
 
@@ -573,20 +477,15 @@ class ProfesseursView(CTkFrame):
         """Charge la liste des matières pour le combobox."""
         if not self.Database.connection:
             return
-
         try:
             data = self.Database._load_matieres()
-          
             matieres = [row[0] for row in data] if data else ["Aucune matière"]
             self.matiere_combo.configure(values=matieres)
-
         except Exception as e:
             print(f"Erreur chargement matières: {e}")
 
     def _filter_professeurs(self):
-        """
-        Filtre le tableau des professeurs en fonction de la recherche.
-        """
+        """Filtre le tableau des professeurs en fonction de la recherche."""
         search_term = self.search_var.get().lower()
         search_type = self.search_type_var.get()
 
@@ -594,23 +493,14 @@ class ProfesseursView(CTkFrame):
             self.load_professeurs()
             return
 
-        # Récupérer tous les items
         all_items = []
         for item in self.tree_prof.get_children():
             values = self.tree_prof.item(item, 'values')
             all_items.append((item, values))
 
-        # Mapping des colonnes
-        col_map = {
-            'nom': 2,
-            'prenom': 3,
-            'matricule': 1,
-            'specialite': 5
-        }
-
+        col_map = {'nom': 2, 'prenom': 3, 'matricule': 1, 'specialite': 5}
         col_index = col_map.get(search_type, 2)
 
-        # Filtrer
         for item, values in all_items:
             if col_index < len(values) and search_term in str(values[col_index]).lower():
                 self.tree_prof.reattach(item, '', 0)
@@ -622,8 +512,10 @@ class ProfesseursView(CTkFrame):
     # ══════════════════════════════════════════════════════════════════════════
 
     def _start_auto_refresh(self):
-        """Démarre le rafraîchissement automatique toutes les 10 secondes."""
-        self._stop_auto_refresh()
+        """Démarre le rafraîchissement automatique toutes les 10 secondes.
+        CORRECTION 5 : annule le job précédent avant d'en créer un nouveau.
+        """
+        self._stop_auto_refresh()   # CORRECTION 5
         self._auto_refresh()
 
     def _auto_refresh(self):
@@ -639,11 +531,8 @@ class ProfesseursView(CTkFrame):
             self._refresh_job = None
 
     def _poll_database(self):
-        """
-        Vérifie silencieusement si les données ont changé et met à jour si nécessaire.
-        """
+        """Vérifie silencieusement si les données ont changé."""
         try:
-            # Vérifier les professeurs
             cursor = self.Database.connection.cursor()
             cursor.execute("SELECT COUNT(*) FROM Professeur")
             new_count = cursor.fetchone()[0]
@@ -655,7 +544,6 @@ class ProfesseursView(CTkFrame):
                 self.load_professeurs()
                 self._update_status("Mise à jour automatique")
 
-            # Toujours recharger les affectations (plus dynamique)
             self.load_affectations()
 
         except Exception:
@@ -671,9 +559,7 @@ class ProfesseursView(CTkFrame):
     # ══════════════════════════════════════════════════════════════════════════
 
     def _on_prof_select(self, event):
-        """
-        Remplit le formulaire avec les données du professeur sélectionné.
-        """
+        """Remplit le formulaire avec les données du professeur sélectionné."""
         selected = self.tree_prof.focus()
         if not selected:
             return
@@ -689,7 +575,6 @@ class ProfesseursView(CTkFrame):
             self.statut_var.set(values[6])
             self.email_var.set(values[7])
 
-            # Mettre à jour le label du professeur sélectionné pour l'affectation
             self.selected_prof_id = values[0]
             self.selected_prof_nom = f"{values[2]} {values[3]}"
             self.selected_prof_label.configure(
@@ -698,14 +583,12 @@ class ProfesseursView(CTkFrame):
             )
 
     def _show_prof_context_menu(self, event):
-        """Affiche le menu contextuel pour les professeurs."""
         item = self.tree_prof.identify_row(event.y)
         if item:
             self.tree_prof.selection_set(item)
             self.menu_prof.tk_popup(event.x_root, event.y_root)
 
     def _show_affect_context_menu(self, event):
-        """Affiche le menu contextuel pour les affectations."""
         item = self.tree_affect.identify_row(event.y)
         if item:
             self.tree_affect.selection_set(item)
@@ -716,15 +599,9 @@ class ProfesseursView(CTkFrame):
     # ══════════════════════════════════════════════════════════════════════════
 
     def add_professeur(self):
-        """
-        Ajoute un nouveau professeur dans la base de données.
-        L'email et le password sont optionnels (peuvent être NULL).
-        """
-        # Validation des champs obligatoires
         if not self.nom_var.get() or not self.prenom_var.get():
             messagebox.showwarning("Attention", "Le nom et le prénom sont obligatoires.")
             return
-
         if not self.matricule_var.get():
             messagebox.showwarning("Attention", "Le matricule est obligatoire.")
             return
@@ -733,30 +610,25 @@ class ProfesseursView(CTkFrame):
             self.Database._add_professeur(
                 matricule=self.matricule_var.get(),
                 nom=self.nom_var.get(),
-                prenom =self.prenom_var.get(),
+                prenom=self.prenom_var.get(),
                 telephone=self.telephone_var.get() or None,
                 specialite=self.specialite_var.get() or None,
                 statut=self.statut_var.get(),
                 email=self.email_var.get() or None,
-               
             )
-            messagebox.showinfo("Succès", "Professeur ajouté avec succès!")
             self._clear_form()
-            self.refresh()
+            # CORRECTION 2 : recharger après écriture
+            self.load_professeurs()
 
         except Exception as e:
             messagebox.showerror("Erreur", f"Impossible d'ajouter le professeur: {e}")
 
     def update_professeur(self):
-        """
-        Modifie les informations d'un professeur existant.
-        """
         if not self.id_var.get():
             messagebox.showwarning("Attention", "Veuillez sélectionner un professeur à modifier.")
             return
 
         try:
-
             self.Database._update_professeur(
                 id=self.id_var.get(),
                 matricule=self.matricule_var.get(),
@@ -767,33 +639,29 @@ class ProfesseursView(CTkFrame):
                 statut=self.statut_var.get(),
                 email=self.email_var.get() or None,
             )
-            messagebox.showinfo("Succès", "Professeur modifié avec succès!")
             self._clear_form()
-            self.refresh()
+            # CORRECTION 2 : recharger après écriture
+            self.load_professeurs()
 
         except Exception as e:
             messagebox.showerror("Erreur", f"Impossible de modifier le professeur: {e}")
 
     def delete_professeur(self):
-        """
-        Supprime un professeur après confirmation.
-        """
         if not self.id_var.get():
             messagebox.showwarning("Attention", "Veuillez sélectionner un professeur à supprimer.")
             return
 
-        # Demander confirmation
         if not messagebox.askyesno("Confirmation",
                                    f"Voulez-vous vraiment supprimer {self.nom_var.get()} {self.prenom_var.get()} ?\n"
                                    "Toutes ses affectations seront également supprimées."):
             return
 
         try:
-            self.Database._delete_professeur(id=self.id_var.get(),nom=self.nom_var.get(),prenom=self.prenom_var.get())
-
-            messagebox.showinfo("Succès", "Professeur supprimé avec succès!")
+            self.Database._delete_professeur(id=self.id_var.get(), nom=self.nom_var.get(), prenom=self.prenom_var.get())
             self._clear_form()
-            self.refresh()
+            # CORRECTION 2 : recharger après écriture
+            self.load_professeurs()
+            self.load_affectations()
 
         except Exception as e:
             messagebox.showerror("Erreur", f"Impossible de supprimer le professeur: {e}")
@@ -814,9 +682,6 @@ class ProfesseursView(CTkFrame):
     # ══════════════════════════════════════════════════════════════════════════
 
     def _save_affectation(self):
-        """
-        Enregistre une nouvelle affectation (professeur -> classe + matière).
-        """
         if not self.selected_prof_id:
             messagebox.showwarning("Attention", "Veuillez sélectionner un professeur.")
             return
@@ -835,20 +700,20 @@ class ProfesseursView(CTkFrame):
         try:
             cursor = self.Database.connection.cursor()
 
-            # Récupérer les IDs
             cursor.execute("SELECT id FROM Classes WHERE nom_classe = %s", (classe,))
             id_classe = cursor.fetchone()
             if not id_classe:
                 messagebox.showerror("Erreur", "Classe non trouvée.")
+                cursor.close()
                 return
 
             cursor.execute("SELECT id_matiere FROM Matiere WHERE nom_matiere = %s", (matiere,))
             id_matiere = cursor.fetchone()
             if not id_matiere:
                 messagebox.showerror("Erreur", "Matière non trouvée.")
+                cursor.close()
                 return
 
-            # Vérifier si l'affectation existe déjà
             cursor.execute("""
                 SELECT id_enseignement FROM Enseignement 
                 WHERE id_professeur = %s AND id_matiere = %s AND id_classe = %s
@@ -859,25 +724,22 @@ class ProfesseursView(CTkFrame):
                 cursor.close()
                 return
 
-            # Créer l'affectation
             cursor.execute("""
                 INSERT INTO Enseignement (id_professeur, id_matiere, id_classe)
                 VALUES (%s, %s, %s)
             """, (self.selected_prof_id, id_matiere[0], id_classe[0]))
 
-            self.Database.connection.commit()
+            self.Database.connection.commit()  # CORRECTION 3
             cursor.close()
 
             messagebox.showinfo("Succès", "Affectation enregistrée avec succès!")
+            # CORRECTION 2 : recharger après écriture
             self.load_affectations()
 
         except Exception as e:
             messagebox.showerror("Erreur", f"Impossible d'enregistrer l'affectation: {e}")
 
     def _delete_affectation(self):
-        """
-        Supprime l'affectation sélectionnée.
-        """
         selected = self.tree_affect.focus()
         if not selected:
             return
@@ -886,14 +748,14 @@ class ProfesseursView(CTkFrame):
         if not values:
             return
 
-        if messagebox.askyesno("Confirmation",
-                               f"Voulez-vous supprimer cette affectation ?"):
+        if messagebox.askyesno("Confirmation", "Voulez-vous supprimer cette affectation ?"):
             try:
                 cursor = self.Database.connection.cursor()
                 cursor.execute("DELETE FROM Enseignement WHERE id_enseignement = %s", (values[0],))
-                self.Database.connection.commit()
+                self.Database.connection.commit()  # CORRECTION 3
                 cursor.close()
 
+                # CORRECTION 2 : recharger après suppression
                 self.load_affectations()
                 messagebox.showinfo("Succès", "Affectation supprimée!")
 
@@ -905,20 +767,17 @@ class ProfesseursView(CTkFrame):
     # ══════════════════════════════════════════════════════════════════════════
 
     def _edit_selected_prof(self):
-        """Remplit le formulaire avec le professeur sélectionné pour modification."""
         selected = self.tree_prof.focus()
         if selected:
             self._on_prof_select(None)
 
     def _delete_selected_prof(self):
-        """Supprime le professeur sélectionné."""
         selected = self.tree_prof.focus()
         if selected:
             self._on_prof_select(None)
             self.delete_professeur()
 
     def _show_prof_details(self):
-        """Affiche les détails complets du professeur."""
         selected = self.tree_prof.focus()
         if selected:
             values = self.tree_prof.item(selected, 'values')
@@ -936,7 +795,6 @@ class ProfesseursView(CTkFrame):
             messagebox.showinfo("Détails Professeur", details)
 
     def _show_prof_affectations(self):
-        """Affiche toutes les affectations du professeur sélectionné."""
         selected = self.tree_prof.focus()
         if selected:
             self._on_prof_select(None)

@@ -1,20 +1,23 @@
 """
 Module EleveView — Gestion des inscriptions en attente.
 
-Séparation claire :
-  __init__   → construction des widgets UNIQUEMENT
-  refresh()  → vide + requête SQL + remplit (appelé par main.py au changement de vue)
-  _poll_database() → requête silencieuse toutes les 10 s (polling)
+LOGIQUE DE POLLING :
+  - Toutes les 30 s, interroge la BDD pour vérifier les dossiers EN_ATTENTE.
+  - Si de nouveaux dossiers arrivent (inscrits depuis le web Django), le
+    Treeview se met à jour automatiquement ET le badge de notifications
+    dans le header d'Acceuil est mis à jour.
+  - Le polling tourne même quand la vue est CACHÉE (contrairement aux autres
+    vues) car c'est lui qui alimente le badge de notifications global.
+    Seul le rafraîchissement du Treeview est suspendu quand la vue est cachée.
 
-Pourquoi pas asyncio ?
-  Tkinter n'est PAS thread-safe. On ne peut pas modifier des widgets depuis
-  un thread secondaire. La bonne approche est after() qui s'exécute dans la
-  boucle principale Tkinter → aucun risque de conflit, aucun import supplémentaire.
+Pourquoi after() et non asyncio/threading ?
+  Tkinter n'est PAS thread-safe. after() s'exécute dans la boucle principale
+  → aucun risque de crash, aucun import supplémentaire.
 """
 
 import pathlib
-import threading                          # utilisé UNIQUEMENT pour charger les PDFs en arrière-plan
-                                          # (DocView peut bloquer plusieurs secondes sur un gros PDF)
+import threading
+import datetime
 from tkinter import messagebox, ttk
 from customtkinter import *
 from utils.constant import *
@@ -23,31 +26,44 @@ from .documentView import DocView
 
 INSCRIPTION_DIR = pathlib.Path(__file__).parent.parent.parent / "WEB" / "media"
 
+# Intervalle de polling en millisecondes (30 secondes)
+POLL_INTERVAL_MS = 30_000
+
 
 class EleveView(CTkFrame):
-    def __init__(self, master, *args, **kwargs):
+
+    def __init__(self, master, db: DbManager = None, *args, **kwargs):
         super().__init__(master, *args, **kwargs)
         self.master = master
-        self.Database = DbManager()
+
+        # Instance DB partagée (passée depuis Acceuil)
+        self.Database = db if db is not None else DbManager()
+
         self.configure(fg_color=BACKGROUND_LIGHT)
 
-        # ── Référence au job after() pour le polling ──────────────────────────
-        # None = polling arrêté. Valeur entière = polling actif (ID annulable).
+        # ── Jobs after() ──────────────────────────────────────────────────────
+        # _poll_job  : tourne EN PERMANENCE (alimente le badge, même vue cachée)
+        # _refresh_job : réservé pour un futur polling local rapide
+        self._poll_job    = None
         self._refresh_job = None
 
-        # ── Variables Tkinter ─────────────────────────────────────────────────
-        self.id_var            = StringVar()
-        self.matricule_var     = StringVar()
-        self.nom_var           = StringVar()
-        self.prenom_var        = StringVar()
-        self.date_naissance_var= StringVar()
-        self.addresse_var      = StringVar()
-        self.classe_var        = StringVar()
-        self.search_var        = StringVar()
-        self.imagePath         = StringVar()
-        self.typesearch_var    = StringVar()
+        # Référence vers le label de notifications dans Acceuil.
+        # Injecté par Acceuil juste après la création :
+        #   self.views["eleve"]._notif_label = self.notificationLabel
+        self._notif_label = None
 
-        # Chemins documents (remplis par GetEleveDocument)
+        # ── Variables Tkinter ─────────────────────────────────────────────────
+        self.id_var             = StringVar()
+        self.matricule_var      = StringVar()
+        self.nom_var            = StringVar()
+        self.prenom_var         = StringVar()
+        self.date_naissance_var = StringVar()
+        self.addresse_var       = StringVar()
+        self.classe_var         = StringVar()
+        self.search_var         = StringVar()
+        self.imagePath          = StringVar()
+        self.typesearch_var     = StringVar()
+
         self.docActeNaissance = None
         self.docDiplome       = None
         self.docBulletin      = None
@@ -56,14 +72,12 @@ class EleveView(CTkFrame):
         # CONSTRUCTION DES WIDGETS  (aucune requête SQL ici)
         # ══════════════════════════════════════════════════════════════════════
 
-        # ── Titre ─────────────────────────────────────────────────────────────
         titreFrame = CTkFrame(self, fg_color='lightblue', border_width=0, height=50)
         titreFrame.pack(fill=X, side=TOP)
         CTkLabel(titreFrame, text="Gestion des Inscriptions",
                  font=FONT_TITLE, text_color=PRIMARY_BLUE,
                  fg_color="lightblue").pack(pady=20)
 
-        # ── Frame gauche : formulaire ──────────────────────────────────────────
         infoFrame = CTkFrame(self, fg_color=BACKGROUND_LIGHT, width=500, border_width=1)
         infoFrame.pack(fill=Y, side=LEFT)
         infoFrame.pack_propagate(False)
@@ -72,7 +86,6 @@ class EleveView(CTkFrame):
                  text_color=BACKGROUND_LIGHT, fg_color=PRIMARY_BLUE,
                  bg_color=BACKGROUND_LIGHT).pack(fill=X, side=TOP)
 
-        # ── Barre de recherche ────────────────────────────────────────────────
         frameSearch = CTkFrame(infoFrame, fg_color=BACKGROUND_LIGHT, border_width=0)
         frameSearch.pack(fill=X, side=TOP)
 
@@ -91,7 +104,6 @@ class EleveView(CTkFrame):
             border_color=PRIMARY_BLUE, textvariable=self.search_var
         )
         self.searchEntry.pack(side=LEFT, anchor=N, expand=True, pady=10, padx=10)
-        # Recherche aussi en appuyant sur Entrée
         self.searchEntry.bind("<Return>", lambda e: self.Search())
 
         CTkButton(
@@ -101,7 +113,6 @@ class EleveView(CTkFrame):
             command=self.Search
         ).pack(side=LEFT, anchor=N, padx=20, pady=10)
 
-        # ── Champs du formulaire ───────────────────────────────────────────────
         mainContentFrame = CTkFrame(infoFrame, fg_color=BACKGROUND_LIGHT)
         mainContentFrame.pack(fill=BOTH, expand=True, padx=10, pady=10)
 
@@ -125,17 +136,14 @@ class EleveView(CTkFrame):
             entry.pack(fill=X, anchor=W)
             return entry
 
-        # Row 1 : Matricule | Nom
         row1 = make_row(mainContentFrame)
         make_field(row1, "Matricule",      self.matricule_var,      "Matricule")
         make_field(row1, "Nom",            self.nom_var,            "Nom")
 
-        # Row 2 : Prénom | Date Naissance
         row2 = make_row(mainContentFrame)
         make_field(row2, "Prénom",         self.prenom_var,         "Prénom")
         make_field(row2, "Date Naissance", self.date_naissance_var, "JJ/MM/AAAA")
 
-        # Row 3 : Adresse | Photo
         row3 = make_row(mainContentFrame)
         make_field(row3, "Adresse",        self.addresse_var,       "Adresse")
 
@@ -145,11 +153,9 @@ class EleveView(CTkFrame):
         self.ImageEleve = CTkLabel(imageFrame, text="Photo", fg_color="lightgray")
         self.ImageEleve.place(x=0, y=0, relwidth=1, relheight=1)
 
-        # Row 4 : Classe
         row4 = make_row(mainContentFrame)
         make_field(row4, "Classe", self.classe_var, "Classe")
 
-        # ── Boutons d'action ───────────────────────────────────────────────────
         buttonsFrame = CTkFrame(mainContentFrame, fg_color=BACKGROUND_LIGHT)
         buttonsFrame.pack(fill=X, expand=True, pady=10)
 
@@ -171,7 +177,6 @@ class EleveView(CTkFrame):
                   border_width=0, width=100,
                   command=self.ShowEleveDocument).pack(side=LEFT, padx=5, fill=X, expand=True)
 
-        # ── Frame droite : tableau ─────────────────────────────────────────────
         tableFrame = CTkFrame(self, fg_color=BACKGROUND_LIGHT, border_width=1)
         tableFrame.pack(fill=BOTH, side=LEFT, expand=True)
 
@@ -179,7 +184,6 @@ class EleveView(CTkFrame):
                  font=FONT_TITLE, text_color=BACKGROUND_LIGHT,
                  fg_color=PRIMARY_BLUE).pack(fill=X, side=TOP)
 
-        # Style Treeview
         style = ttk.Style()
         style.theme_use("default")
         style.configure("Treeview.Heading", background=PRIMARY_BLUE,
@@ -214,10 +218,8 @@ class EleveView(CTkFrame):
         self.TableListe.bind("<ButtonRelease-1>", self.getListeData)
         self.TableListe.pack(fill=BOTH, expand=True, pady=10, padx=10)
 
-        # ── Indicateur de dernière mise à jour (polling) ───────────────────────
-        # Informe l'utilisateur que les données sont bien synchronisées.
         self._status_label = CTkLabel(
-            self, text="⏳ En attente de données...",
+            self, text="⏳ En attente de la première vérification...",
             font=("Arial", 10), text_color="gray", fg_color=BACKGROUND_LIGHT
         )
         self._status_label.pack(side=BOTTOM, anchor=E, padx=10, pady=2)
@@ -225,96 +227,138 @@ class EleveView(CTkFrame):
         self.pack(fill=BOTH, expand=True)
 
     # ══════════════════════════════════════════════════════════════════════════
-    # CHARGEMENT DES DONNÉES
+    # POLLING GLOBAL — tourne en permanence, même vue cachée
     # ══════════════════════════════════════════════════════════════════════════
 
-    def GetEleves(self):
-        """Requête SQL complète + remplissage du Treeview.
-        Appelé par refresh() (changement de vue) et par Accepted().
-        """
-        if not self.Database.connection:
-            return
-        data = self.Database.refresh_pending_list()
-        self.TableListe.delete(*self.TableListe.get_children())
-        if data:
-            for row in data:
-                self.TableListe.insert("", END, values=row)
-        self._update_status()
+    def start_global_polling(self):
+        print("[ELEVE] start_global_polling() appelé")
+        """Lance le polling permanent toutes les 30 s.
 
-    def refresh(self):
-        """Appelé par main.py à chaque fois que cette vue devient visible.
-        Vide le formulaire, recharge les données, démarre le polling.
-        """
-        self.clear()
-        self.GetEleves()
-        self._start_auto_refresh()   # ← démarre la boucle de polling
+        Appelé UNE SEULE FOIS depuis Acceuil.__init__() après la création
+        de la vue. Ce polling survit aux changements de vue.
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # POLLING — rafraîchissement automatique toutes les 10 s
-    # ══════════════════════════════════════════════════════════════════════════
-
-    def _poll_database(self):
-        """Requête silencieuse : compare les IDs BDD vs IDs affichés.
-        Ne rafraîchit le Treeview QUE si les données ont réellement changé
-        → évite le scintillement inutile.
-        Ne touche PAS aux champs du formulaire ni à la sélection en cours.
+        Il réalise deux choses :
+          1. Met à jour le badge de notifications dans le header.
+          2. Si la vue EleveView est visible, met aussi à jour le Treeview.
         """
-        if not self.Database.connection:
+        if self._poll_job is not None:
+            self.after_cancel(self._poll_job)
+            self._poll_job = None
+        self._run_poll()
+
+    def _run_poll(self):
+        """Corps du cycle de polling : requête BDD → badge → Treeview."""
+        try:
+            self.Database._ensure_connection()
+            if not self.Database.connection:
+                print("[POLL] Pas de connexion DB")
+                return
+
+            data  = self.Database.refresh_pending_list()
+            count = len(data) if data else 0
+            print(f"[POLL] {count} dossier(s) EN_ATTENTE récupérés")
+
+            # 1. Badge
+            self._update_badge(count)
+
+            # 2. Treeview — toujours, sans condition
+            self._refresh_treeview(data)
+            self._update_status(count)
+
+        except Exception as e:
+            import traceback
+            print(f"[POLL] ERREUR : {e}")
+            traceback.print_exc()
+
+        finally:
+            self._poll_job = self.after(POLL_INTERVAL_MS, self._run_poll)
+
+    def _update_badge(self, count: int):
+        """Met à jour le bouton de notifications dans le header d'Acceuil."""
+        if self._notif_label is None:
             return
         try:
-            nouvelles_datas = self.Database.refresh_pending_list()
-
-            ids_affiches = {
-                self.TableListe.item(i, "values")[0]
-                for i in self.TableListe.get_children()
-            }
-            ids_bdd = {str(row[0]) for row in nouvelles_datas} if nouvelles_datas else set()
-
-            if ids_affiches != ids_bdd:
-                # Les données ont changé : on recharge le tableau
-                self.TableListe.delete(*self.TableListe.get_children())
-                if nouvelles_datas:
-                    for row in nouvelles_datas:
-                        self.TableListe.insert("", END, values=row)
-
-            self._update_status()
-
+            color = "red" if count > 0 else "gray"
+            self._notif_label.configure(text=str(count), text_color=color)
         except Exception:
-            # Silencieux : pas de popup toutes les 10 s
             pass
 
-    def _start_auto_refresh(self):
-        """Démarre le polling. Annule un éventuel job précédent
-        pour éviter d'avoir deux boucles parallèles.
-        """
-        self._stop_auto_refresh()
-        self._auto_refresh()
+    def _refresh_treeview(self, data):
+        """Compare IDs affichés vs IDs BDD, ne redessine QUE si besoin."""
+        ids_affiches = {
+            self.TableListe.item(i, "values")[0]
+            for i in self.TableListe.get_children()
+        }
+        ids_bdd = {str(row[0]) for row in data} if data else set()
 
-    def _auto_refresh(self):
-        """Interroge la BDD puis se replanifie dans 10 secondes.
-        Utilise after() → s'exécute dans le thread Tkinter → pas de conflit UI.
+        print(f"[TREEVIEW] ids_affiches={ids_affiches}  ids_bdd={ids_bdd}  diff={ids_affiches != ids_bdd}")
+
+        if ids_affiches != ids_bdd:
+            print("[TREEVIEW] Mise à jour du tableau...")
+            self.TableListe.delete(*self.TableListe.get_children())
+            if data:
+                for row in data:
+                    self.TableListe.insert("", END, values=row)
+            print("[TREEVIEW] Tableau mis à jour.")
+
+    def _update_status(self, count: int):
+        """Met à jour la barre de statut en bas de la vue."""
+        now = datetime.datetime.now().strftime("%H:%M:%S")
+        if count > 0:
+            self._status_label.configure(
+                text=f"🔴 {count} dossier(s) en attente — {now}",
+                text_color="red"
+            )
+        else:
+            self._status_label.configure(
+                text=f"✅ Aucun dossier en attente — {now}",
+                text_color="gray"
+            )
+
+    def stop_global_polling(self):
+        """Stoppe définitivement le polling.
+        À appeler UNIQUEMENT depuis Acceuil._on_close().
         """
-        self._poll_database()
-        self._refresh_job = self.after(10_000, self._auto_refresh)
+        if self._poll_job is not None:
+            self.after_cancel(self._poll_job)
+            self._poll_job = None
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # refresh() — appelé par show_view() au changement de vue
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def refresh(self):
+        """Rechargement immédiat sans attendre le prochain cycle de 30 s."""
+        self.clear()
+        try:
+            self.Database._ensure_connection()
+            if self.Database.connection:
+                data  = self.Database.refresh_pending_list()
+                count = len(data) if data else 0
+                self.TableListe.delete(*self.TableListe.get_children())
+                if data:
+                    for row in data:
+                        self.TableListe.insert("", END, values=row)
+                self._update_badge(count)
+                self._update_status(count)
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Impossible de charger les dossiers : {e}")
+
+    # Stubs de compatibilité avec show_view() (qui appelle _stop/_start)
+    def _start_auto_refresh(self):
+        pass   # Le polling global tourne déjà en permanence
 
     def _stop_auto_refresh(self):
-        """Stoppe le polling quand la vue est cachée → aucune requête inutile."""
+        """Marqué comme non-visible + stoppe l'éventuel polling local rapide."""
         if self._refresh_job is not None:
             self.after_cancel(self._refresh_job)
             self._refresh_job = None
-
-    def _update_status(self):
-        """Met à jour l'horodatage affiché en bas de la vue."""
-        import datetime
-        now = datetime.datetime.now().strftime("%H:%M:%S")
-        self._status_label.configure(text=f"✅ Dernière mise à jour : {now}")
 
     # ══════════════════════════════════════════════════════════════════════════
     # ÉVÉNEMENTS TREEVIEW
     # ══════════════════════════════════════════════════════════════════════════
 
     def getListeData(self, ev):
-        """Remplit le formulaire avec la ligne sélectionnée dans le Treeview."""
         selected = self.TableListe.focus()
         values   = self.TableListe.item(selected, 'values')
         if not values:
@@ -337,7 +381,6 @@ class EleveView(CTkFrame):
     # ══════════════════════════════════════════════════════════════════════════
 
     def Accepted(self):
-        """Accepte l'inscription de l'élève sélectionné."""
         if not self.matricule_var.get():
             messagebox.showwarning("Attention", "Veuillez sélectionner un élève.")
             return
@@ -345,14 +388,12 @@ class EleveView(CTkFrame):
             self.Database.AcceptedInscription(
                 self.matricule_var.get(), self.id_var.get()
             )
-            self.GetEleves()
             self.clear()
+            self.refresh()   # rechargement immédiat après acceptation
 
     def Search(self):
-        """Recherche dans la BDD selon le critère et la valeur saisis."""
         if not self.search_var.get().strip():
-            # Si la recherche est vide, recharger toute la liste
-            self.GetEleves()
+            self.refresh()
             return
         if self.Database.connection:
             data = self.Database.SearchEleveInscription(
@@ -367,7 +408,6 @@ class EleveView(CTkFrame):
                 messagebox.showinfo("Recherche", "Aucun résultat trouvé.")
 
     def clear(self):
-        """Vide tous les champs du formulaire."""
         self.id_var.set("")
         self.matricule_var.set("")
         self.nom_var.set("")
@@ -379,7 +419,6 @@ class EleveView(CTkFrame):
         self.ImageEleve.configure(image="", text="Photo", fg_color="lightgray")
 
     def showImage(self, path):
-        """Charge et affiche la photo de l'élève."""
         if not path:
             return
         try:
@@ -395,7 +434,6 @@ class EleveView(CTkFrame):
     # ══════════════════════════════════════════════════════════════════════════
 
     def GetEleveDocument(self):
-        """Récupère les chemins des 3 documents depuis la BDD."""
         if not self.id_var.get():
             messagebox.showwarning("Attention", "Veuillez sélectionner un élève.")
             return None
@@ -409,21 +447,12 @@ class EleveView(CTkFrame):
         return None
 
     def ShowEleveDocument(self):
-        """Ouvre une fenêtre avec les 3 documents PDF de l'élève.
-
-        Pourquoi threading ici ?
-          DocView (PyMuPDF) peut prendre 1-3 secondes pour rasteriser un PDF.
-          Si on l'appelle directement, l'UI freeze pendant ce temps.
-          On charge les images dans un thread secondaire, puis on les affiche
-          dans le thread principal via after(0, callback) → thread-safe.
-        """
         documents = self.GetEleveDocument()
         if not documents:
             return
 
         acte_path, diplome_path, bulletin_path = documents
 
-        # Création de la fenêtre modale
         docWindow = CTkToplevel(self, fg_color=BACKGROUND_LIGHT)
         docWindow.geometry("600x800+750+10")
         docWindow.title("Documents de l'élève")
@@ -437,7 +466,6 @@ class EleveView(CTkFrame):
         tabview.add("Diplôme")
         tabview.add("Dernier Bulletin")
 
-        # Labels de chargement (spinners textuels)
         lbl_acte     = CTkLabel(tabview.tab("Acte de Naissance"), text="⏳ Chargement...")
         lbl_diplome  = CTkLabel(tabview.tab("Diplôme"),           text="⏳ Chargement...")
         lbl_bulletin = CTkLabel(tabview.tab("Dernier Bulletin"),  text="⏳ Chargement...")
@@ -445,7 +473,6 @@ class EleveView(CTkFrame):
             lbl.pack(expand=True)
 
         def _load_docs():
-            """Chargement des PDFs dans un thread secondaire → pas de freeze UI."""
             results = {}
             for key, path in [("acte", acte_path),
                                ("diplome", diplome_path),
@@ -457,11 +484,9 @@ class EleveView(CTkFrame):
                         results[key] = None
                 else:
                     results[key] = None
-            # Retour dans le thread principal via after(0)
             docWindow.after(0, lambda: _apply_docs(results))
 
         def _apply_docs(results):
-            """Affiche les images chargées — s'exécute dans le thread Tkinter."""
             mapping = {
                 "acte":     (lbl_acte,     "Acte de Naissance"),
                 "diplome":  (lbl_diplome,  "Diplôme"),
@@ -474,5 +499,4 @@ class EleveView(CTkFrame):
                 else:
                     lbl.configure(text=f"⚠ Aucun {tab_name} disponible")
 
-        # Lance le chargement en arrière-plan
         threading.Thread(target=_load_docs, daemon=True).start()
