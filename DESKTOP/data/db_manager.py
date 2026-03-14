@@ -8,17 +8,11 @@ CORRECTIONS APPLIQUÉES :
   4. cursor.close() systématique pour éviter les fuites de ressources
 """
 
-from ast import Return
 import datetime
-from email import message
-from random import random
-import string
 import time
 from tkinter import messagebox
 
 import mysql.connector 
-
-import sqlite3
 
 DB_CONFIG={
         'host':"localhost",
