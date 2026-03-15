@@ -80,7 +80,8 @@ class Acceuil(CTk):
             1: {"text": "Gestion Des Élèves",     "command": lambda: self.show_view("eleve")},
             2: {"text": "Affectation Par Classe",  "command": lambda: self.show_view("repartitions")},
             3: {"text": "Gestion Des Professeurs", "command": lambda: self.show_view("professeurs")},
-            4: {"text": "💰 Caisse & Scolarité",   "command": lambda: self.show_view("caisse")},
+            4: {"text": "📝 Gestion des Notes",    "command": lambda: self.show_view("notes")},
+            5: {"text": "💰 Caisse & Scolarité",   "command": lambda: self.show_view("caisse")},
         }
 
         for _, value in BTN.items():
@@ -108,6 +109,7 @@ class Acceuil(CTk):
         self._create_eleve_view()
         self._create_repartitions_view()
         self._create_professeurs_view()
+        self._create_notes_view()
         # self._create_caisse_view()
 
         # ── Injection du label de notifications dans EleveView ────────────────
@@ -151,6 +153,12 @@ class Acceuil(CTk):
         view.pack_forget()
         self.views["professeurs"] = view
 
+    def _create_notes_view(self):
+        from views.notes import NotesView
+        view = NotesView(self.mainFrame, db=self.Database)
+        view.pack_forget()
+        self.views["notes"] = view
+
     # def _create_caisse_view(self):
     #     from caisse import CaisseView
     #     view = CaisseView(self.mainFrame, db=self.Database)
@@ -192,6 +200,7 @@ class Acceuil(CTk):
     def show_eleve_view(self):        self.show_view("eleve")
     def show_repartitions_view(self): self.show_view("repartitions")
     def show_professeurs_view(self):  self.show_view("professeurs")
+    def show_notes_view(self):        self.show_view("notes")
     def show_caisse_view(self):       self.show_view("caisse")
 
     # ══════════════════════════════════════════════════════════════════════════

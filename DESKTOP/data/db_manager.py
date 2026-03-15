@@ -58,6 +58,7 @@ class DbManager:
         self.createTablesProfesseurs()
         self.createTableMatiere()
         self.addMatiere()
+        # self.create_notes_tables()
 
     # ══════════════════════════════════════════════════════════════════════════
     # CORRECTION 2 : Reconnexion automatique
@@ -551,7 +552,3 @@ class DbManager:
             
             except Exception as e:
                 messagebox.showerror("Erreur", f"Erreur lors de l'ajout des matières : {e}")
-
-
-if __name__ == "__main__":  
-    db_manager = DbManager()

@@ -10,6 +10,7 @@ FRAME_WHITE       = "#FFFFFF"   # Frame centrale / tableaux
 BORDER_GRAY       = "#D0D4D9"   # Bordures, séparateurs
 TEXT_DARK         = "#1E1E1E"   # Texte principal
 TEXT_MUTED        = "#6B7280"   # Texte secondaire
+TEXT_GRAY        = "#9CA3AF"   # Texte désactivé / Placeholder
 
 SUCCESS_GREEN     = "#2ECC71"   # Actif / Valide
 WARNING_ORANGE    = "#F39C12"   # Attention

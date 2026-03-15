@@ -354,4 +354,34 @@ class ComptaDB:
                 ts[tbl] = str(r["t"]) if r and r["t"] else None
             except Exception:
                 ts[tbl] = None
+        # Clé spéciale : COUNT des élèves ACCEPTED — change dès qu'une inscription
+        # est validée par la secrétaire, déclenchant le polling de la comptabilité.
+        try:
+            r = self._exec(
+                "SELECT COUNT(*) AS c FROM inscriptions_eleve WHERE statut='ACCEPTED'",
+                (), "one")
+            ts["inscriptions"] = str(r["c"]) if r else "0"
+        except Exception:
+            ts["inscriptions"] = None
         return ts
+
+    # ── Nouveaux inscrits sans aucun paiement ─────────────────────────────────
+
+    def get_nouveaux_inscrits_sans_paiement(self, annee: str = "2025-2026") -> list[dict]:
+        """
+        Retourne les élèves ACCEPTED qui n'ont encore AUCUNE ligne dans la table
+        paiements (pour l'année en cours, hors annulations).
+        Ces élèves sont les 'nouveaux dossiers à traiter' pour la comptable.
+        """
+        return self._exec(
+            "SELECT ie.id, ie.matricule, ie.nom, ie.prenom, ie.classe_reelle "
+            "FROM inscriptions_eleve ie "
+            "WHERE ie.statut = 'ACCEPTED' "
+            "  AND NOT EXISTS ( "
+            "      SELECT 1 FROM paiements p "
+            "      WHERE p.eleve_id = ie.id "
+            "        AND p.annee_scolaire = %s "
+            "        AND p.annule = 0 "
+            "  ) "
+            "ORDER BY ie.nom, ie.prenom",
+            (annee,))

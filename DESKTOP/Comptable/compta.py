@@ -613,7 +613,10 @@ class FenetreParamFrais(Toplevel):
 class _VueEleves(Frame):
     def __init__(self, parent, db:ComptaDB):
         super().__init__(parent, bg=C.CARD_BG)
-        self.db=db; self._build()
+        self.db=db
+        # Cache des ids nouveaux inscrits (ACCEPTED sans paiement)
+        self._ids_nouveaux: set = set()
+        self._build()
 
     def _build(self):
         # barre filtres
@@ -636,6 +639,13 @@ class _VueEleves(Frame):
                      command=lambda v=val:self._set_filtre(v))
             b.pack(side=LEFT,padx=3)
 
+        # Filtre "Nouveaux uniquement" — isole les élèves sans aucun paiement
+        Button(bar, text="★ Nouveaux uniquement",
+               font=C.TEXT_SMALL, fg=C.TEXT_WHITE, bg="#7B1FA2",
+               relief=FLAT, cursor="hand2", padx=8, pady=3,
+               command=lambda: self._set_filtre("Nouveau")
+               ).pack(side=LEFT, padx=3)
+
         _W.btn_primary(bar,text="F5 Actualiser",command=self.refresh).pack(side=LEFT,padx=8)
         self._count_lbl=Label(bar,text="",font=C.TEXT_SMALL,fg=C.TEXT_GRAY,bg=C.LIGHT_BLUE)
         self._count_lbl.pack(side=LEFT,padx=6)
@@ -648,6 +658,22 @@ class _VueEleves(Frame):
         # colonne gauche
         left=Frame(split,bg=C.WHITE,width=C.LEFT_W)
         left.pack(side=LEFT,fill=Y); left.pack_propagate(False)
+
+        # ── Badge "Nouveaux dossiers à traiter" ──────────────────────────────
+        self._badge_frame=Frame(left, bg="#F3E5F5", relief=FLAT, bd=0)
+        self._badge_frame.pack(fill=X, padx=6, pady=(6,0))
+        self._badge_lbl=Label(
+            self._badge_frame,
+            text="",
+            font=C.TEXT_BOLD,
+            fg="#7B1FA2", bg="#F3E5F5",
+            cursor="hand2",
+            anchor=W, padx=8, pady=4
+        )
+        self._badge_lbl.pack(fill=X)
+        # Cliquer sur le badge active directement le filtre "Nouveau"
+        self._badge_lbl.bind("<Button-1>", lambda _: self._set_filtre("Nouveau"))
+        self._badge_frame.pack_forget()   # masqué tant qu'il n'y a rien
 
         # recherche rapide dans la liste
         sb2=Frame(left,bg=C.WHITE)
@@ -669,6 +695,7 @@ class _VueEleves(Frame):
         self._tree.tag_configure("ok", background=C.LIGHT_GREEN, foreground=C.SUCCESS_GREEN)
         self._tree.tag_configure("imp",background=C.LIGHT_RED,   foreground=C.DANGER_RED)
         self._tree.tag_configure("par",background=C.LIGHT_ORANGE,foreground=C.WARNING_ORANGE)
+        self._tree.tag_configure("nouveau", background="#EDE7F6", foreground="#7B1FA2")
         sb3=ttk.Scrollbar(left,orient=VERTICAL,command=self._tree.yview)
         self._tree.configure(yscrollcommand=sb3.set)
         self._tree.pack(side=LEFT,fill=BOTH,expand=True,padx=(6,0),pady=(0,6))
@@ -686,6 +713,17 @@ class _VueEleves(Frame):
         self._filtre_var.set(val); self._refresh_list()
 
     def refresh(self):
+        # ── Charge les nouveaux inscrits sans paiement ────────────────────────
+        nouveaux = self.db.get_nouveaux_inscrits_sans_paiement(ANNEE)
+        self._ids_nouveaux = {e["id"] for e in nouveaux}
+        nb_nouveaux = len(self._ids_nouveaux)
+        if nb_nouveaux > 0:
+            self._badge_lbl.configure(
+                text=f"🔔  Nouveaux dossiers à traiter : {nb_nouveaux}  (cliquer pour filtrer)")
+            self._badge_frame.pack(fill=X, padx=6, pady=(6,0))
+        else:
+            self._badge_frame.pack_forget()
+
         classes=self.db.get_classes()
         noms=[c["nom_classe"] for c in classes]
         self._classe_cb.configure(values=noms)
@@ -701,6 +739,12 @@ class _VueEleves(Frame):
         for r in self._tree.get_children(): self._tree.delete(r)
         n_tot=n_imp=n_par=0
         for e in self.db.get_eleves(classe):
+            est_nouveau = e["id"] in self._ids_nouveaux
+
+            # Filtre "Nouveaux uniquement" — élèves ACCEPTED sans aucun versement
+            if filtre == "Nouveau" and not est_nouveau:
+                continue
+
             rows=self.db.get_total_par_type(e["id"],ANNEE)
             paye_total=sum(float(r["total_paye"]) for r in rows)
             mt_total=sum(float(r["montant_total"]) for r in rows)
@@ -709,17 +753,23 @@ class _VueEleves(Frame):
             elif paye_total==0:  statut="Non paye"; tag="imp"
             else:                statut="Partiel"; tag="par"
 
-            if filtre=="Impaye" and statut=="A jour": continue
+            # Les nouveaux inscrits sans paiement reçoivent leur propre tag visuel
+            if est_nouveau:
+                statut = "Nouveau"
+                tag = "nouveau"
+
+            if filtre=="Impaye" and statut not in ("Non paye","Partiel","Nouveau"): continue
             if filtre=="A jour" and statut!="A jour": continue
             nom_full=f"{e['nom']} {e['prenom']}".lower()
             if search and search not in nom_full and search not in e.get("matricule","").lower():
                 continue
             n_tot+=1
             if statut!="A jour":
-                n_imp+=1 if statut=="Non paye" else 0
+                n_imp+=1 if statut in ("Non paye","Nouveau") else 0
                 n_par+=1 if statut=="Partiel" else 0
             self._tree.insert("",END,iid=e["id"],values=(f"{e['nom']} {e['prenom']}",statut),tags=(tag,))
-        self._count_lbl.configure(text=f"{n_tot} eleve(s) | {n_imp+n_par} impaye(s)")
+        suffix = f" | {len(self._ids_nouveaux)} nouveau(x)" if self._ids_nouveaux else ""
+        self._count_lbl.configure(text=f"{n_tot} eleve(s) | {n_imp+n_par} impaye(s){suffix}")
 
     def _on_select(self, _=None):
         sel=self._tree.selection()
