@@ -1,0 +1,448 @@
+{% extends 'base.html' %}
+
+{% block title %}Notes — {{ evaluation.titre }} · Academix{% endblock %}
+
+{% block content %}
+<style>
+/* ── Responsive notes table ────────────────────────────────────────────────── */
+
+/* Sur mobile : pas de scroll horizontal, le tableau s'adapte */
+.notes-table-wrap {
+  width: 100%;
+  overflow-x: hidden;
+}
+
+/* Colonnes fixes pour mobile */
+.notes-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.notes-table th,
+.notes-table td {
+  padding: 0.55rem 0.4rem;
+  vertical-align: middle;
+  word-break: break-word;
+}
+
+/* Largeurs colonnes desktop */
+.col-num    { width: 38px; }
+.col-nom    { width: auto; }
+.col-note   { width: 110px; }
+.col-statut { width: 90px; }
+.col-date   { width: 130px; }
+
+/* Sur mobile : masquer colonnes secondaires */
+@media (max-width: 575.98px) {
+  .col-date,
+  .col-saisi { display: none; }
+  .col-note  { width: 90px; }
+  .col-num   { width: 28px; }
+  .col-statut { width: 70px; }
+  .notes-table th, .notes-table td { padding: 0.4rem 0.3rem; font-size: 0.85rem; }
+  .note-input { font-size: 0.9rem; padding: 0.2rem 0.3rem; }
+}
+
+/* Input note compact */
+.note-input {
+  width: 100%;
+  text-align: center;
+  border-radius: 6px;
+  font-weight: 600;
+}
+.note-input:focus { box-shadow: 0 0 0 3px rgba(13,110,253,.25); }
+
+/* Ligne modifiée (en cours de saisie) */
+tr.row-modified td { background-color: #fff3cd !important; }
+/* Ligne avec note sauvegardée */
+tr.row-saved td { background-color: #d1e7dd !important; }
+/* Ligne en erreur */
+tr.row-error td { background-color: #f8d7da !important; }
+
+/* Badge note */
+.note-badge {
+  display: inline-block;
+  min-width: 44px;
+  padding: 4px 8px;
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-align: center;
+}
+.note-badge.high   { background:#d1e7dd; color:#0a3622; }
+.note-badge.medium { background:#fff3cd; color:#664d03; }
+.note-badge.low    { background:#f8d7da; color:#58151c; }
+
+/* Card header sticky sur mobile */
+.sticky-actions {
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  border-top: 2px solid #dee2e6;
+  z-index: 10;
+  padding: 0.75rem 1rem;
+}
+
+/* Progress bar notes saisies */
+.notes-progress { height: 6px; border-radius: 3px; }
+
+/* Mode lecture : mise en évidence */
+.view-mode-banner {
+  background: linear-gradient(135deg, #6f42c1, #0d6efd);
+  color: #fff;
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  font-weight: 600;
+}
+</style>
+
+<div class="container-fluid py-3 px-2 px-md-4">
+
+  {# Breadcrumb #}
+  <nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb small">
+      <li class="breadcrumb-item">
+        <a href="{% url 'profmanager:dashboard' matricule=professeur.matricule %}">
+          <i class="bi bi-house me-1"></i>Tableau de bord
+        </a>
+      </li>
+      <li class="breadcrumb-item active">Notes · {{ evaluation.titre }}</li>
+    </ol>
+  </nav>
+
+  {# Messages flash #}
+  {% for message in messages %}
+  <div class="alert alert-{{ message.tags }} alert-dismissible fade show py-2" role="alert">
+    <i class="bi bi-{% if message.tags == 'success' %}check-circle{% else %}exclamation-triangle{% endif %} me-2"></i>
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+
+  {# ── En-tête évaluation ──────────────────────────────────────────────────── #}
+  <div class="card mb-3 border-0 shadow-sm">
+    <div class="card-body p-3">
+
+      {# Mode lecture banner #}
+      {% if evaluation.verrouille %}
+      <div class="view-mode-banner mb-3">
+        <i class="bi bi-lock me-2"></i>
+        Évaluation verrouillée — Consultation uniquement
+      </div>
+      {% endif %}
+
+      <div class="row align-items-start g-2">
+        <div class="col-12 col-md-8">
+          <h5 class="mb-1 fw-bold">
+            <i class="bi bi-clipboard-check me-2 text-primary"></i>{{ evaluation.titre }}
+          </h5>
+          <div class="d-flex flex-wrap gap-1 mt-2">
+            <span class="badge {% if evaluation.type_eval == 'Examen' %}bg-danger{% elif evaluation.type_eval == 'Devoir' %}bg-warning text-dark{% else %}bg-info text-dark{% endif %}">
+              {{ evaluation.type_eval }}
+            </span>
+            <span class="badge bg-secondary">{{ evaluation.classe.nom_classe }}</span>
+            <span class="badge bg-primary">{{ evaluation.matiere.nom_matiere }}</span>
+            <span class="badge bg-light text-dark border">T{{ evaluation.trimestre }}</span>
+            <span class="badge bg-light text-dark border">{{ evaluation.date_eval|date:"d/m/Y" }}</span>
+            <span class="badge bg-light text-dark border">{{ evaluation.annee_scolaire }}</span>
+          </div>
+        </div>
+        <div class="col-12 col-md-4 text-md-end">
+          <div class="small text-muted">
+            <i class="bi bi-person-check me-1"></i>{{ saisi_par }}
+          </div>
+          <div class="small text-muted mt-1">
+            <span id="count-saisies" class="fw-bold text-success">{{ nb_saisies }}</span>
+            / {{ eleves_notes|length }} notes saisies
+          </div>
+          {# Barre de progression #}
+          <div class="progress notes-progress mt-2" style="max-width:200px; margin-left:auto;">
+            <div class="progress-bar bg-success" id="progress-bar"
+                 style="width:{% if eleves_notes %}{% widthratio nb_saisies eleves_notes|length 100 %}{% else %}0{% endif %}%">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# Stats mini #}
+      {% if nb_saisies > 0 %}
+      <div class="row g-2 mt-2">
+        <div class="col-4 col-md-2">
+          <div class="border rounded text-center py-1 px-2 bg-light">
+            <div class="fw-bold text-success small">{{ note_max }}</div>
+            <div class="text-muted" style="font-size:0.7rem">Max</div>
+          </div>
+        </div>
+        <div class="col-4 col-md-2">
+          <div class="border rounded text-center py-1 px-2 bg-light">
+            <div class="fw-bold text-danger small">{{ note_min }}</div>
+            <div class="text-muted" style="font-size:0.7rem">Min</div>
+          </div>
+        </div>
+        <div class="col-4 col-md-2">
+          <div class="border rounded text-center py-1 px-2 bg-light">
+            <div class="fw-bold text-primary small">{{ note_moy }}</div>
+            <div class="text-muted" style="font-size:0.7rem">Moy.</div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+  {# ── Formulaire / Tableau ────────────────────────────────────────────────── #}
+  {% if not evaluation.verrouille %}
+  <form method="POST" id="notes-form" novalidate>
+    {% csrf_token %}
+  {% endif %}
+
+    <div class="card shadow-sm border-0">
+
+      {# Header avec bouton sauvegarde (desktop) #}
+      <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+        <span class="fw-semibold small">
+          <i class="bi bi-people me-1"></i>
+          {{ eleves_notes|length }} élève(s)
+          {% if not evaluation.verrouille %}
+          · <span class="text-muted" style="font-size:0.8rem">
+              Tapez <kbd>Entrée</kbd> pour passer au suivant
+            </span>
+          {% endif %}
+        </span>
+        {% if not evaluation.verrouille %}
+        <button type="submit" form="notes-form" class="btn btn-success btn-sm d-none d-sm-inline-flex align-items-center gap-1">
+          <i class="bi bi-floppy"></i> Sauvegarder tout
+        </button>
+        {% endif %}
+      </div>
+
+      <div class="card-body p-0">
+        {% if eleves_notes %}
+        <div class="notes-table-wrap">
+          <table class="notes-table table table-hover mb-0">
+            <thead class="table-dark">
+              <tr>
+                <th class="col-num text-center">#</th>
+                <th class="col-nom">Élève</th>
+                <th class="col-note text-center">Note <span class="text-warning">/20</span></th>
+                <th class="col-statut text-center d-none d-sm-table-cell">Statut</th>
+                <th class="col-date d-none d-md-table-cell">Dernière saisie</th>
+              </tr>
+            </thead>
+            <tbody id="notes-tbody">
+              {% for item in eleves_notes %}
+              <tr class="{% if item.note %}row-saved{% endif %}"
+                  id="row-{{ item.eleve.pk }}"
+                  data-original="{% if item.note %}{{ item.note.note }}{% endif %}">
+
+                {# Numéro #}
+                <td class="col-num text-center text-muted small fw-bold">
+                  {{ forloop.counter }}
+                </td>
+
+                {# Nom + Prénom empilés sur mobile #}
+                <td class="col-nom">
+                  <div class="fw-semibold lh-1">{{ item.eleve.nom }}</div>
+                  <div class="text-muted small">{{ item.eleve.prenom }}</div>
+                  <div class="d-sm-none" style="font-size:0.7rem; color:#aaa;">
+                    {{ item.eleve.matricule }}
+                  </div>
+                </td>
+
+                {# Input note #}
+                <td class="col-note text-center">
+                  {% if not evaluation.verrouille %}
+                  <input
+                    type="number"
+                    class="form-control form-control-sm note-input"
+                    name="note_{{ item.eleve.pk }}"
+                    id="inp-{{ item.eleve.pk }}"
+                    min="0" max="20" step="0.25"
+                    value="{% if item.note %}{{ item.note.note }}{% endif %}"
+                    placeholder="—"
+                    autocomplete="off"
+                    oninput="onNoteInput(this)"
+                    onblur="onNoteBlur(this)"
+                  >
+                  <div class="invalid-feedback" style="font-size:0.7rem">0–20</div>
+                  {% else %}
+                    {# Mode lecture : badge coloré #}
+                    {% if item.note %}
+                      {% if item.note.note >= 14 %}
+                        <span class="note-badge high">{{ item.note.note }}</span>
+                      {% elif item.note.note >= 10 %}
+                        <span class="note-badge medium">{{ item.note.note }}</span>
+                      {% else %}
+                        <span class="note-badge low">{{ item.note.note }}</span>
+                      {% endif %}
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  {% endif %}
+                </td>
+
+                {# Statut #}
+                <td class="col-statut text-center d-none d-sm-table-cell">
+                  {% if item.note %}
+                    <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size:0.7rem">
+                      <i class="bi bi-check2"></i> Saisi
+                    </span>
+                  {% else %}
+                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle" style="font-size:0.7rem">
+                      En attente
+                    </span>
+                  {% endif %}
+                </td>
+
+                {# Date saisie (masquée sur mobile) #}
+                <td class="col-date d-none d-md-table-cell small text-muted">
+                  {% if item.note %}
+                    <div>{{ item.note.date_saisie|date:"d/m/Y" }}</div>
+                    <div style="font-size:0.75rem">{{ item.note.date_saisie|date:"H:i" }}</div>
+                    <div class="text-primary" style="font-size:0.7rem">{{ item.note.saisi_par }}</div>
+                  {% else %}
+                    <span class="fst-italic">—</span>
+                  {% endif %}
+                </td>
+
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+          <i class="bi bi-people fs-2 d-block mb-2"></i>
+          Aucun élève affecté à cette classe.
+        </div>
+        {% endif %}
+      </div>
+
+    </div><!-- /card -->
+
+  {% if not evaluation.verrouille %}
+  </form>
+  {% endif %}
+
+  {# ── Bouton flottant mobile ──────────────────────────────────────────────── #}
+  {% if not evaluation.verrouille and eleves_notes %}
+  <div class="sticky-actions d-sm-none">
+    <div class="d-flex justify-content-between align-items-center">
+      <div class="small text-muted">
+        <span id="count-saisies-mob" class="fw-bold text-success">{{ nb_saisies }}</span>
+        / {{ eleves_notes|length }} saisies
+      </div>
+      <button type="submit" form="notes-form" class="btn btn-success btn-sm px-4">
+        <i class="bi bi-floppy me-1"></i> Sauvegarder tout
+      </button>
+    </div>
+  </div>
+  {% endif %}
+
+  {# Bouton retour #}
+  <div class="mt-3 mb-5">
+    <a href="{% url 'profmanager:dashboard' matricule=professeur.matricule %}"
+       class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i> Retour au tableau de bord
+    </a>
+  </div>
+
+</div>
+
+<script>
+// ── Compteur et barre de progression ─────────────────────────────────────────
+const TOTAL = {{ eleves_notes|length }};
+
+function updateProgress() {
+  const filled = document.querySelectorAll('.note-input').length > 0
+    ? [...document.querySelectorAll('.note-input')].filter(i => i.value.trim() !== '').length
+    : 0;
+
+  // On compte les saisies déjà sauvegardées + celles en cours de frappe
+  const savedRows   = document.querySelectorAll('tr.row-saved').length;
+  const modifiedRows = document.querySelectorAll('tr.row-modified').length;
+  const total_filled = Math.max(savedRows, filled);
+
+  const pct = TOTAL > 0 ? Math.round((total_filled / TOTAL) * 100) : 0;
+  document.querySelectorAll('#count-saisies, #count-saisies-mob')
+    .forEach(el => el.textContent = total_filled);
+  const bar = document.getElementById('progress-bar');
+  if (bar) bar.style.width = pct + '%';
+}
+
+// ── Gestion de la saisie ─────────────────────────────────────────────────────
+function onNoteInput(input) {
+  const row = document.getElementById('row-' + input.name.replace('note_', ''));
+  const val = input.value.trim();
+
+  // Validation en temps réel
+  if (val === '') {
+    input.classList.remove('is-invalid', 'is-valid');
+    row.classList.remove('row-modified', 'row-error');
+    row.classList.toggle('row-saved', row.dataset.original !== '');
+    updateProgress();
+    return;
+  }
+
+  const num = parseFloat(val.replace(',', '.'));
+  if (isNaN(num) || num < 0 || num > 20) {
+    input.classList.add('is-invalid');
+    input.classList.remove('is-valid');
+    row.classList.remove('row-modified', 'row-saved');
+    row.classList.add('row-error');
+  } else {
+    input.classList.remove('is-invalid');
+    input.classList.add('is-valid');
+    row.classList.remove('row-error', 'row-saved');
+    row.classList.add('row-modified');
+  }
+  updateProgress();
+}
+
+function onNoteBlur(input) {
+  // Normalise la virgule en point
+  if (input.value.includes(',')) {
+    input.value = input.value.replace(',', '.');
+  }
+  // Arrondi à 0.25 le plus proche
+  const num = parseFloat(input.value);
+  if (!isNaN(num) && num >= 0 && num <= 20) {
+    input.value = (Math.round(num * 4) / 4).toFixed(2).replace(/\.00$/, '');
+  }
+}
+
+// ── Navigation clavier : Entrée = élève suivant ───────────────────────────────
+document.querySelectorAll('.note-input').forEach(function(input, index, all) {
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (all[index + 1]) all[index + 1].focus();
+      else input.blur();
+    }
+    // Flèches haut/bas
+    if (e.key === 'ArrowDown' && all[index + 1]) { e.preventDefault(); all[index + 1].focus(); }
+    if (e.key === 'ArrowUp'   && all[index - 1]) { e.preventDefault(); all[index - 1].focus(); }
+  });
+});
+
+// ── Confirmation avant de quitter si modifications non sauvegardées ───────────
+let hasUnsaved = false;
+document.querySelectorAll('.note-input').forEach(input => {
+  input.addEventListener('input', () => { hasUnsaved = true; });
+});
+document.getElementById('notes-form')?.addEventListener('submit', () => {
+  hasUnsaved = false;
+});
+window.addEventListener('beforeunload', e => {
+  if (hasUnsaved) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+
+// Init progress
+updateProgress();
+</script>
+{% endblock %}

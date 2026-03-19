@@ -150,31 +150,3 @@ class DocumentEleve(models.Model):
         # utile pour l'admin
         return f"Documents de {self.eleve.nom_complet}"
     
-
-
-##########################""Classes pour la partie affectation officielle (Scolarité) - Correspondent à la table Scolarite_Affectation créée par Tkinter
-
-class Classe(models.Model):
-    nom_classe = models.CharField(max_length=20, unique=True)
-
-    class Meta:
-        db_table = 'Classes' # On force Django à utiliser le nom créé par Tkinter
-        managed =False # Django ne gere pas cette table est creer par tkinter 
-
-
-    def __str__(self):
-        return self.nom_classe
-
-class Affectation(models.Model):
-    # On lie l'élève (ton modèle existant)
-    eleve = models.ForeignKey('Eleve', on_delete=models.CASCADE, db_column='eleve_id')
-    # On lie la classe
-    classe = models.ForeignKey(Classe, on_delete=models.CASCADE, db_column='classe_id')
-    annee_scolaire = models.CharField(max_length=20)
-
-    class Meta:
-        db_table = 'Scolarite_Affectation' # On force Django à utiliser la table Tkinter
-        managed =False
-
-    def __str__(self):
-        return f"{self.eleve.nom} en {self.classe.nom_classe}"

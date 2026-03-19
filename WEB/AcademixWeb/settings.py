@@ -39,7 +39,12 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'Inscriptions',
-    'AppNote'
+    'ProfManager',
+
+    # Third-party apps
+    'django_cotton',           # Required: Django Cotton
+    'tungsten_ui',    # Tungsten UI
+    
 ]
 
 MIDDLEWARE = [

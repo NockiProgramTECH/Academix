@@ -1,0 +1,216 @@
+{% extends 'base.html' %}
+
+{% block title %}Tableau de bord — {{ professeur.prenom }} {{ professeur.nom }} · Academix{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="row">
+
+    {# ── SIDEBAR ── #}
+    <nav class="col-md-3 col-lg-2 d-md-block bg-dark sidebar min-vh-100 pt-3">
+      <div class="position-sticky pt-3">
+        <div class="text-center mb-4 px-2">
+          <div class="bg-primary rounded-circle d-inline-flex align-items-center
+                      justify-content-center mb-2" style="width:56px;height:56px">
+            <span class="text-white fw-bold fs-4">
+              {{ professeur.prenom|first|upper }}{{ professeur.nom|first|upper }}
+            </span>
+          </div>
+          <p class="text-white fw-semibold mb-0">{{ professeur.prenom }} {{ professeur.nom }}</p>
+          <small class="text-secondary">{{ professeur.matricule }}</small>
+        </div>
+        <ul class="nav flex-column px-2">
+          <li class="nav-item mb-1">
+            <a class="nav-link active text-white rounded" href="#">
+              <i class="bi bi-speedometer2 me-2"></i> Tableau de bord
+            </a>
+          </li>
+          {% for ens in enseignements %}
+          <li class="nav-item mb-1">
+            <a class="nav-link text-secondary rounded" href="#ens-{{ ens.pk }}">
+              <i class="bi bi-journal-text me-2"></i>
+              {{ ens.matiere.nom_matiere|truncatechars:22 }}
+              <span class="badge bg-secondary ms-1">{{ ens.classe.nom_classe }}</span>
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+        <hr class="border-secondary mx-2">
+        <div class="px-2">
+          <a href="{% url 'profmanager:logout' %}" class="btn btn-outline-danger btn-sm w-100">
+            <i class="bi bi-box-arrow-left me-1"></i> Déconnexion
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    {# ── MAIN CONTENT ── #}
+    <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 py-4">
+
+      {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+      {% endfor %}
+
+      <div class="d-flex justify-content-between align-items-center pb-2 mb-4 border-bottom">
+        <div>
+          <h1 class="h3 mb-0">Bienvenue, {{ professeur.prenom }} {{ professeur.nom }}</h1>
+          <small class="text-muted">{{ enseignements|length }} matière(s) assignée(s)</small>
+        </div>
+      </div>
+
+      {# Stats rapides #}
+      <div class="row g-3 mb-4">
+        <div class="col-sm-6">
+          <div class="card text-bg-primary">
+            <div class="card-body text-center py-3">
+              <div class="fs-2 fw-bold">{{ enseignements|length }}</div>
+              <div class="small">Matière(s) / Classe(s)</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-sm-6">
+          <div class="card text-bg-success">
+            <div class="card-body text-center py-3">
+              <div class="fs-2 fw-bold">{{ enseignements|length }}</div>
+              <div class="small">Classes actives</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# Carte par enseignement #}
+      {% if enseignements %}
+        {% for ens in enseignements %}
+        <div class="card mb-5 shadow-sm" id="ens-{{ ens.pk }}">
+          <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+              <h5 class="mb-0">
+                <i class="bi bi-journal-richtext me-2"></i>
+                {{ ens.matiere.nom_matiere }}
+                <span class="badge bg-light text-primary ms-2">{{ ens.classe.nom_classe }}</span>
+              </h5>
+              <small class="opacity-75">Coeff. {{ ens.matiere.coefficient }}</small>
+            </div>
+            <div class="d-flex gap-2 align-items-center">
+              <span class="badge bg-light text-primary">{{ ens.eleves|length }} élève(s)</span>
+              <a href="{% url 'profmanager:creer_evaluation' matricule=professeur.matricule enseignement_id=ens.pk %}"
+                 class="btn btn-light btn-sm">
+                <i class="bi bi-plus-circle me-1"></i> Nouvelle évaluation
+              </a>
+            </div>
+          </div>
+
+          <div class="card-body p-0">
+            <ul class="nav nav-tabs px-3 pt-2" id="tabs-{{ ens.pk }}" role="tablist">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link active" data-bs-toggle="tab"
+                        data-bs-target="#eleves-panel-{{ ens.pk }}" type="button" role="tab">
+                  <i class="bi bi-people me-1"></i> Élèves ({{ ens.eleves|length }})
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab"
+                        data-bs-target="#evals-panel-{{ ens.pk }}" type="button" role="tab">
+                  <i class="bi bi-clipboard-check me-1"></i> Évaluations
+                  {% if ens.evaluations %}<span class="badge bg-primary ms-1">{{ ens.evaluations|length }}</span>{% endif %}
+                </button>
+              </li>
+            </ul>
+
+            <div class="tab-content p-3">
+
+              {# Tab Élèves #}
+              <div class="tab-pane fade show active" id="eleves-panel-{{ ens.pk }}" role="tabpanel">
+                {% if ens.eleves %}
+                <div class="table-responsive">
+                  <table class="table table-hover table-sm align-middle mb-0">
+                    <thead class="table-dark">
+                      <tr><th>#</th><th>Nom</th><th>Prénom</th><th>Matricule</th><th>Classe</th></tr>
+                    </thead>
+                    <tbody>
+                      {% for eleve in ens.eleves %}
+                      <tr>
+                        <td class="text-muted small">{{ forloop.counter }}</td>
+                        <td class="fw-semibold">{{ eleve.nom }}</td>
+                        <td>{{ eleve.prenom }}</td>
+                        <td><code>{{ eleve.matricule }}</code></td>
+                        <td><span class="badge bg-secondary">{{ ens.classe.nom_classe }}</span></td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+                {% else %}
+                <p class="text-muted my-3"><i class="bi bi-info-circle me-1"></i>Aucun élève dans cette classe.</p>
+                {% endif %}
+              </div>
+
+              {# Tab Évaluations #}
+              <div class="tab-pane fade" id="evals-panel-{{ ens.pk }}" role="tabpanel">
+                {% if ens.evaluations %}
+                <div class="table-responsive">
+                  <table class="table table-hover table-sm align-middle mb-0">
+                    <thead class="table-dark">
+                      <tr>
+                        <th>Titre</th><th>Type</th><th>Trimestre</th>
+                        <th>Date</th><th>Année</th><th class="text-center">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for eval in ens.evaluations %}
+                      <tr>
+                        <td class="fw-semibold">{{ eval.titre }}</td>
+                        <td>
+                          <span class="badge
+                            {% if eval.type_eval == 'Examen' %}bg-danger
+                            {% elif eval.type_eval == 'Devoir' %}bg-warning text-dark
+                            {% else %}bg-info text-dark{% endif %}">
+                            {{ eval.type_eval }}
+                          </span>
+                        </td>
+                        <td>T{{ eval.trimestre }}</td>
+                        <td>{{ eval.date_eval|date:"d/m/Y" }}</td>
+                        <td>{{ eval.annee_scolaire }}</td>
+                        <td class="text-center">
+                          <a href="{% url 'profmanager:saisir_notes' matricule=professeur.matricule evaluation_id=eval.pk %}"
+                             class="btn btn-primary btn-sm">
+                            <i class="bi bi-pencil-square me-1"></i> Notes
+                          </a>
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-muted">
+                  <i class="bi bi-clipboard-x fs-3 d-block mb-2"></i>
+                  Aucune évaluation créée.
+                  <br>
+                  <a href="{% url 'profmanager:creer_evaluation' matricule=professeur.matricule enseignement_id=ens.pk %}"
+                     class="btn btn-primary btn-sm mt-2">
+                    <i class="bi bi-plus-circle me-1"></i> Créer la première
+                  </a>
+                </div>
+                {% endif %}
+              </div>
+
+            </div>{# /tab-content #}
+          </div>{# /card-body #}
+        </div>{# /card #}
+        {% endfor %}
+
+      {% else %}
+      <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        Aucune matière ou classe ne vous est assignée pour le moment.
+      </div>
+      {% endif %}
+
+    </main>
+  </div>
+</div>
+{% endblock %}

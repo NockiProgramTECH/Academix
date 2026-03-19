@@ -1,0 +1,4 @@
+tungsten-ui
+django
+pillow
+mysqlclient

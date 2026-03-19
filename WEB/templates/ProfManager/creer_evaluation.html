@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+
+{% block title %}Nouvelle évaluation — {{ enseignement.matiere.nom_matiere }} · Academix{% endblock %}
+
+{% block content %}
+<div class="container py-5" style="max-width:640px">
+
+  {# Breadcrumb #}
+  <nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item">
+        <a href="{% url 'profmanager:dashboard' matricule=professeur.matricule %}">Tableau de bord</a>
+      </li>
+      <li class="breadcrumb-item active">Nouvelle évaluation</li>
+    </ol>
+  </nav>
+
+  <div class="card shadow-sm">
+    <div class="card-header bg-primary text-white">
+      <h5 class="mb-0">
+        <i class="bi bi-clipboard-plus me-2"></i>
+        Créer une évaluation
+      </h5>
+      <small class="opacity-75">
+        {{ enseignement.matiere.nom_matiere }} · {{ enseignement.classe.nom_classe }}
+      </small>
+    </div>
+
+    <div class="card-body p-4">
+      {% for message in messages %}
+      <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+      {% endfor %}
+
+      <form method="POST">
+        {% csrf_token %}
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold" for="titre">Titre <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="titre" name="titre"
+                 placeholder="Ex : Devoir n°1 – Algèbre" required>
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-sm-6">
+            <label class="form-label fw-semibold" for="type_eval">Type <span class="text-danger">*</span></label>
+            <select class="form-select" id="type_eval" name="type_eval">
+              {% for value, label in type_choices %}
+              <option value="{{ value }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label fw-semibold" for="trimestre">Trimestre <span class="text-danger">*</span></label>
+            <select class="form-select" id="trimestre" name="trimestre">
+              <option value="1">Trimestre 1</option>
+              <option value="2">Trimestre 2</option>
+              <option value="3">Trimestre 3</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-sm-6">
+            <label class="form-label fw-semibold" for="date_eval">Date <span class="text-danger">*</span></label>
+            <input type="date" class="form-control" id="date_eval" name="date_eval"
+                   value="{{ today }}" required>
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label fw-semibold" for="annee_scolaire">Année scolaire <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="annee_scolaire" name="annee_scolaire"
+                   placeholder="Ex : 2024-2025" required>
+          </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-4">
+          <button type="submit" class="btn btn-primary flex-grow-1">
+            <i class="bi bi-check-circle me-1"></i> Créer et saisir les notes
+          </button>
+          <a href="{% url 'profmanager:dashboard' matricule=professeur.matricule %}"
+             class="btn btn-outline-secondary">
+            Annuler
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

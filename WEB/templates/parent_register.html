@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+
+{% block title %}Inscription Parent - Academix{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow-sm mt-5">
+                <div class="card-body p-5">
+                    <h2 class="text-center mb-4">Inscription Parent</h2>
+                    <form method="POST">
+                        {% csrf_token %}
+                        <div class="row">
+                            <div class="col-md-6 mb-4">
+                                <label for="nom" class="form-label">Nom</label>
+                                <input type="text" class="form-control" id="nom" name="nom" required>
+                            </div>
+                            <div class="col-md-6 mb-4">
+                                <label for="prenom" class="form-label">Prénom</label>
+                                <input type="text" class="form-control" id="prenom" name="prenom" required>
+                            </div>
+                        </div>
+                        <div class="mb-4">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" name="email" required>
+                        </div>
+                        <div class="mb-4">
+                            <label for="telephone" class="form-label">Téléphone</label>
+                            <input type="tel" class="form-control" id="telephone" name="telephone" required>
+                        </div>
+                        <div class="mb-4">
+                            <label for="password" class="form-label">Mot de passe</label>
+                            <input type="password" class="form-control" id="password" name="password" required>
+                        </div>
+                        <div class="mb-5">
+                            <label for="password_confirm" class="form-label">Confirmer mot de passe</label>
+                            <input type="password" class="form-control" id="password_confirm" name="password_confirm" required>
+                        </div>
+                        <button type="submit" class="btn btn-success w-100 py-2">S'inscrire</button>
+                    </form>
+                    <div class="text-center mt-3">
+                        <a href="{% url 'parent_login' %}" class="btn btn-link">Déjà inscrit ? Se connecter</a>
+                        <hr>
+                        <a href="/" class="text-muted text-decoration-none">← Retour à l'accueil</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
