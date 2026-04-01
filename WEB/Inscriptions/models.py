@@ -91,6 +91,40 @@ class Eleve(models.Model):
 
         # Créer la structure de dossiers pour l'élève en utilisant son uuid
         create_eleve_folder_structure(self.classe, self.id)
+    
+
+    def get_moyenne_generale(self, trimestre=1, annee=None):
+        try:
+            from ParentsManager.models import Note
+            notes_qs = Note.objects.filter(eleve=self, evaluation__trimestre=trimestre)
+            if annee:
+                notes_qs = notes_qs.filter(evaluation__annee_scolaire=annee)
+                
+            if not notes_qs.exists(): return 0.0
+            
+            total_points = 0.0
+            total_coefs = 0
+            for no in notes_qs:
+                coef = no.evaluation.matiere.coefficient or 1
+                total_points += float(no.note) * coef
+                total_coefs += coef
+            return round(total_points / total_coefs, 2) if total_coefs else 0.0
+        except Exception:
+            return 0.0
+
+    def get_total_absences(self, trimestre=1, annee=None):
+        try:
+            from ParentsManager.models import Absence
+            abs_qs = Absence.objects.filter(eleve=self, trimestre=trimestre)
+            if annee:
+                abs_qs = abs_qs.filter(annee_scolaire=annee)
+                
+            non_just = abs_qs.filter(statut='NON_JUSTIFIEE').count()
+            just = abs_qs.filter(statut='JUSTIFIEE').count()
+            return {'non_justifiees': non_just, 'justifiees': just, 'total': non_just + just}
+        except Exception:
+            return {'non_justifiees': 0, 'justifiees': 0, 'total': 0}
+   
 
       
     

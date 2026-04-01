@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<!-- Custom Premium Styles -->
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap');
+
+    body {
+        font-family: 'Outfit', sans-serif;
+        background-color: #f4f7fe;
+    }
+
+    .signup-container {
+        min-height: 80vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 0;
+    }
+
+    .glass-card {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 20px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+        transition: transform 0.3s ease;
+    }
+
+    .glass-card:hover {
+        transform: translateY(-5px);
+    }
+
+    .card-header-gradient {
+        background: linear-gradient(135deg, #1565C0 0%, #0d47a1 100%);
+        padding: 2rem;
+        text-align: center;
+        color: white;
+    }
+
+    .card-header-gradient h4 {
+        font-weight: 800;
+        margin: 0;
+        letter-spacing: 0.5px;
+    }
+
+    .btn-premium {
+        background: linear-gradient(135deg, #1565C0 0%, #0d47a1 100%);
+        border: none;
+        border-radius: 10px;
+        padding: 12px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        color: white;
+        box-shadow: 0 8px 15px rgba(21, 101, 192, 0.3);
+        transition: all 0.3s ease;
+    }
+
+    .btn-premium:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 20px rgba(21, 101, 192, 0.4);
+        color: white;
+    }
+
+    .form-control {
+        border-radius: 10px;
+        border: 2px solid #e2e8f0;
+        padding: 12px 15px;
+        transition: all 0.3s ease;
+        background-color: #f8fafc;
+    }
+
+    .form-control:focus {
+        border-color: #1565C0;
+        box-shadow: 0 0 0 4px rgba(21, 101, 192, 0.1);
+        background-color: #fff;
+    }
+
+    .form-label {
+        font-weight: 600;
+        color: #475569;
+        margin-bottom: 0.5rem;
+    }
+</style>
+
+<div class="container signup-container">
+    <div class="row w-100 justify-content-center">
+        <div class="col-md-7 col-lg-6">
+            <div class="glass-card">
+                <div class="card-header-gradient">
+                    <h4>👨‍👩‍👧 Inscription Espace Parent</h4>
+                    <p class="mb-0 mt-2 text-white-50">Créez votre compte pour suivre la scolarité de vos enfants</p>
+                </div>
+                <div class="card-body p-5">
+                    <form method="post">
+                        {% csrf_token %}
+                        {% for field in form %}
+                            <div class="mb-4">
+                                <label class="form-label">{{ field.label }}</label>
+                                {{ field }}
+                                {% if field.help_text %}
+                                    <small class="form-text text-muted d-block mt-2"><i class="fas fa-info-circle"></i> {{ field.help_text }}</small>
+                                {% endif %}
+                                {% for error in field.errors %}
+                                    <div class="text-danger small mt-2 fw-bold">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endfor %}
+                        
+                        <div class="d-grid mt-5">
+                            <button type="submit" class="btn btn-premium btn-lg">S'inscrire et lier l'enfant</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="card-footer bg-light text-center py-4 border-top-0">
+                    <span class="text-muted">Vous avez déjà un profil Parent ?</span> 
+                    {% comment %} <a href="{% url 'login' %}" class="fw-bold text-primary text-decoration-none ms-1">Connectez-vous</a> {% endcomment %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

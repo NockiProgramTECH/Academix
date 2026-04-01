@@ -27,4 +27,6 @@ urlpatterns = [
     path("parents/login/", parent_login, name="parent_login"),
     path("parents/inscription/", parent_register, name="parent_register"),
     
+    path('parents/', include('ParentsManager.urls'))
+    
 ]

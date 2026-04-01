@@ -1,0 +1,190 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<!-- Custom Premium Styles -->
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    body {
+        font-family: 'Inter', sans-serif;
+        background-color: #f8fafc;
+        color: #334155;
+    }
+
+    .dashboard-header {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        border-radius: 20px;
+        padding: 3rem 2.5rem;
+        color: white;
+        margin-top: 2rem;
+        margin-bottom: 3rem;
+        box-shadow: 0 15px 35px rgba(15, 23, 42, 0.2);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .dashboard-header::after {
+        content: "🎓";
+        position: absolute;
+        right: -20px;
+        top: -40px;
+        font-size: 15rem;
+        opacity: 0.05;
+        transform: rotate(-15deg);
+    }
+
+    .child-card {
+        background: white;
+        border-radius: 20px;
+        border: none;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        overflow: hidden;
+        border-top: 5px solid #3b82f6;
+    }
+
+    .child-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 20px 40px rgba(59, 130, 246, 0.15);
+    }
+
+    .stat-box {
+        background: #f1f5f9;
+        border-radius: 12px;
+        padding: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        transition: all 0.3s ease;
+    }
+
+    .stat-box:hover {
+        background: #e2e8f0;
+    }
+
+    .stat-value {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-top: 0.5rem;
+    }
+
+    .grade-success { color: #10b981; }
+    .grade-danger { color: #ef4444; }
+
+    .badge-soft-success {
+        background-color: rgba(16, 185, 129, 0.1);
+        color: #10b981;
+    }
+
+    .badge-soft-danger {
+        background-color: rgba(239, 68, 68, 0.1);
+        color: #ef4444;
+    }
+
+    .avatar-circle {
+        width: 60px;
+        height: 60px;
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        font-weight: bold;
+        box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3);
+    }
+</style>
+
+<div class="container pb-5">
+    
+    <!-- HEADER -->
+    <div class="row">
+        <div class="col-12">
+            {% if erreur %}
+                <div class="alert alert-danger mt-4 rounded-3 shadow-sm border-0">{{ erreur }}</div>
+            {% else %}
+                <div class="dashboard-header d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-uppercase fw-bold text-primary mb-2" style="letter-spacing: 2px;">Espace Parent</div>
+                        <h1 class="fw-bold mb-1">Bienvenue, {{ parent.user.first_name }} 👋</h1>
+                        <p class="mb-0 text-slate-300 fs-5 opacity-75">Voici le résumé des performances scolaires de vos enfants.</p>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- CHILDREN CARDS -->
+    {% if parent %}
+    <div class="row g-4">
+        {% for info in performances %}
+        <div class="col-xl-6">
+            <div class="child-card h-100">
+                <div class="card-body p-4 p-lg-5">
+                    
+                    <!-- En-tête de la carte enfant -->
+                    <div class="d-flex align-items-center mb-4">
+                        <div class="avatar-circle me-4">
+                            {{ info.eleve.prenom|slice:":1" }}{{ info.eleve.nom|slice:":1" }}
+                        </div>
+                        <div>
+                            <h3 class="fw-bold mb-1 text-slate-800">{{ info.eleve.prenom }} {{ info.eleve.nom }}</h3>
+                            <span class="badge bg-secondary px-3 py-2 rounded-pill me-2">Matricule : {{ info.eleve.matricule }}</span>
+                            <span class="badge bg-primary px-3 py-2 rounded-pill">Classe : {{ info.eleve.classe }}</span>
+                        </div>
+                    </div>
+
+                    <hr class="opacity-10 mb-4">
+
+                    <!-- Statistiques -->
+                    <div class="row g-3">
+                        <div class="col-sm-6">
+                            <div class="stat-box h-100">
+                                <span class="text-uppercase fw-semibold text-muted text-xs tracking-wider">Moyenne Trimestre</span>
+                                <div class="stat-value {% if info.moyenne >= 10 %}grade-success{% else %}grade-danger{% endif %}">
+                                    {{ info.moyenne|floatformat:2 }} <span class="text-muted fs-5 fw-normal">/20</span>
+                                </div>
+                                {% if info.moyenne >= 10 %}
+                                    <div class="badge badge-soft-success mt-2 rounded-pill px-3 py-1">En réussite</div>
+                                {% else %}
+                                    <div class="badge badge-soft-danger mt-2 rounded-pill px-3 py-1">Efforts requis</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="col-sm-6">
+                            <div class="stat-box h-100">
+                                <span class="text-uppercase fw-semibold text-muted text-xs tracking-wider">Bilan Disciplinaire</span>
+                                <div class="w-100 mt-3">
+                                    <div class="d-flex justify-content-between mb-2 pb-2 border-bottom">
+                                        <span class="text-slate-600"><i class="fas fa-check-circle text-success me-2"></i>Abs. Justifiées</span>
+                                        <span class="fw-bold fs-5">{{ info.absences.justifiees }}<small>h</small></span>
+                                    </div>
+                                    <div class="d-flex justify-content-between pt-1">
+                                        <span class="text-slate-600"><i class="fas fa-exclamation-circle text-danger me-2"></i>Abs. Non-Justifiées</span>
+                                        <span class="fw-bold fs-5">{{ info.absences.non_justifiees }}<small>h</small></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12">
+            <div class="text-center py-5 bg-white rounded-4 shadow-sm border border-light">
+                <div class="fs-1 mb-3">📭</div>
+                <h4 class="fw-bold text-slate-700">Aucun enfant trouvé</h4>
+                <p class="text-muted mb-0">Il n'y a actuellement aucun enfant rattaché à votre compte parent.</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
