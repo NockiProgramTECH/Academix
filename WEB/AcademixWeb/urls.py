@@ -26,4 +26,5 @@ urlpatterns = [
     path("prof/", include("ProfManager.urls")),
     path("parents/login/", parent_login, name="parent_login"),
     path("parents/inscription/", parent_register, name="parent_register"),
+    
 ]

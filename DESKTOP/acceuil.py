@@ -5,13 +5,8 @@ CORRECTIONS APPLIQUÉES :
   1. Instance DbManager UNIQUE transmise à toutes les vues.
   2. show_view() appelle refresh() immédiatement après .pack().
   3. Le polling de notifications EST DÉLÉGUÉ à EleveView.start_global_polling().
-     Acceuil n'a plus son propre _start_notification_polling() car c'est
-     EleveView qui gère le badge directement, via self._notif_label injecté.
-  4. Fermeture propre : stop_global_polling() appelé sur EleveView.
-
-Pourquoi after() et non asyncio/threading ?
-  Tkinter n'est pas thread-safe. after() s'exécute dans la boucle principale
-  → aucun risque de crash, aucun import supplémentaire.
+  4. VieScolaireView intégrée avec son propre polling d'absences.
+  5. Fermeture propre : stop_global_polling() appelé sur EleveView et VieScolaireView.
 """
 
 import pathlib
@@ -51,7 +46,6 @@ class Acceuil(CTk):
         )
         CTkLabel(header, image=self.images['logo'], text="").pack(side=LEFT, padx=20)
 
-        # Badge de notifications — mis à jour par EleveView._run_poll() toutes les 30 s
         self.images['notification_icon'] = CTkImage(
             Image.open(IMAGE_DIR / "notification.png"), size=(50, 50)
         )
@@ -81,7 +75,8 @@ class Acceuil(CTk):
             2: {"text": "Affectation Par Classe",  "command": lambda: self.show_view("repartitions")},
             3: {"text": "Gestion Des Professeurs", "command": lambda: self.show_view("professeurs")},
             4: {"text": "📝 Gestion des Notes",    "command": lambda: self.show_view("notes")},
-            5: {"text": "💰 Caisse & Scolarité",   "command": lambda: self.show_view("caisse")},
+            5: {"text": "📅 Vie Scolaire",          "command": lambda: self.show_view("vie_scolaire")},
+            6: {"text": "💰 Caisse & Scolarité",   "command": lambda: self.show_view("caisse")},
         }
 
         for _, value in BTN.items():
@@ -110,19 +105,23 @@ class Acceuil(CTk):
         self._create_repartitions_view()
         self._create_professeurs_view()
         self._create_notes_view()
+        self._create_vie_scolaire_view()      # ← NOUVEAU
         # self._create_caisse_view()
 
         # ── Injection du label de notifications dans EleveView ────────────────
-        # EleveView._run_poll() met à jour self._notif_label directement,
-        # sans passer par Acceuil. C'est plus propre et ça évite le double polling.
         self.views["eleve"]._notif_label = self.notificationLabel
 
-        # ── Démarrage du polling global (une seule fois, survit aux nav.) ──────
-        # Ce polling tourne en permanence même quand EleveView est cachée.
-        # Il alimente le badge ET rafraîchit le Treeview si la vue est visible.
-        print("[ACCEUIL] Démarrage du polling global...")
+        # ── Injection du label dans VieScolaireView (alertes absences web) ───
+        self.views["vie_scolaire"]._notif_label = self.notificationLabel
+
+        # ── Démarrage des pollings ────────────────────────────────────────────
+        print("[ACCEUIL] Démarrage du polling global élèves...")
         self.views["eleve"].start_global_polling()
-        print("[ACCEUIL] Polling démarré.")
+
+        print("[ACCEUIL] Démarrage du polling absences...")
+        self.views["vie_scolaire"].start_global_polling()
+
+        print("[ACCEUIL] Pollings démarrés.")
 
         # Affiche la vue par défaut
         self.show_view("eleve")
@@ -158,6 +157,12 @@ class Acceuil(CTk):
         view = NotesView(self.mainFrame, db=self.Database)
         view.pack_forget()
         self.views["notes"] = view
+
+    def _create_vie_scolaire_view(self):
+        from views.vie_scolaire import VieScolaireView
+        view = VieScolaireView(self.mainFrame, db=self.Database)
+        view.pack_forget()
+        self.views["vie_scolaire"] = view
 
     # def _create_caisse_view(self):
     #     from caisse import CaisseView
@@ -197,11 +202,12 @@ class Acceuil(CTk):
     # RACCOURCIS
     # ══════════════════════════════════════════════════════════════════════════
 
-    def show_eleve_view(self):        self.show_view("eleve")
-    def show_repartitions_view(self): self.show_view("repartitions")
-    def show_professeurs_view(self):  self.show_view("professeurs")
-    def show_notes_view(self):        self.show_view("notes")
-    def show_caisse_view(self):       self.show_view("caisse")
+    def show_eleve_view(self):           self.show_view("eleve")
+    def show_repartitions_view(self):    self.show_view("repartitions")
+    def show_professeurs_view(self):     self.show_view("professeurs")
+    def show_notes_view(self):           self.show_view("notes")
+    def show_vie_scolaire_view(self):    self.show_view("vie_scolaire")
+    def show_caisse_view(self):          self.show_view("caisse")
 
     # ══════════════════════════════════════════════════════════════════════════
     # FERMETURE PROPRE
@@ -209,11 +215,12 @@ class Acceuil(CTk):
 
     def _on_close(self):
         """Arrête tous les jobs after() avant de fermer la fenêtre."""
-        # Stoppe le polling global de notifications
         if "eleve" in self.views:
             self.views["eleve"].stop_global_polling()
 
-        # Stoppe le polling de la vue active
+        if "vie_scolaire" in self.views:
+            self.views["vie_scolaire"].stop_global_polling()
+
         if self.current_view and self.current_view in self.views:
             vue = self.views[self.current_view]
             if hasattr(vue, "_stop_auto_refresh"):

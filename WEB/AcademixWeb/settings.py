@@ -40,10 +40,11 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'Inscriptions',
     'ProfManager',
+    'ParentsManager',
 
-    # Third-party apps
-    'django_cotton',           # Required: Django Cotton
-    'tungsten_ui',    # Tungsten UI
+    
+
+    
     
 ]
 
