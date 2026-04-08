@@ -90,6 +90,7 @@ DATABASES = {
         'PASSWORD': os.getenv('DB_PASSWORD'),
         'HOST':     os.getenv('DB_HOST'),
         'PORT':     os.getenv('DB_PORT'),
+        'CONN_MAX_AGE': 600, # Garde la connexion ouverte 10 minutes
         'OPTIONS': {
             'ssl': {'ca': None},
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
