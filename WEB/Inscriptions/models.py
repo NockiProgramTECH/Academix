@@ -2,7 +2,14 @@ import time
 
 from django.db import models
 import uuid
-from .utils import create_eleve_folder_structure, delete_eleve_folder
+
+# models.py
+from .utils import (
+    acte_upload_path, 
+    bulletin_upload_path, 
+    diplome_upload_path, 
+    photo_upload_path
+)
 
 
 class Tuteur(models.Model):
@@ -33,11 +40,11 @@ class Tuteur(models.Model):
         return f"Tuteur - {self.pere_nom} {self.pere_prenom} / {self.mere_nom} {self.mere_prenom}"
 
 
-def get_image(instance, filename):
-    """Upload d'image dans le sous‑répertoire ``photos`` de l'élève."""
-    ext = filename.split(".")[-1]
-    # on conserve le nom d'origine, la structure de dossier suffit
-    return f"inscriptions/{instance.classe}/{instance.id}/photos/{filename}"
+# def get_image(instance, filename):
+#     """Upload d'image dans le sous‑répertoire ``photos`` de l'élève."""
+#     ext = filename.split(".")[-1]
+#     # on conserve le nom d'origine, la structure de dossier suffit
+#     return f"inscriptions/{instance.classe}/{instance.id}/photos/{filename}"
 
 class Eleve(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False) #l'uid unique n'es pa modfiable
@@ -62,7 +69,7 @@ class Eleve(models.Model):
     adresse = models.TextField()
     
     # Nouveau: Photo de l'élève (optionnelle)
-    photo = models.ImageField(upload_to=get_image, blank=True, null=True, verbose_name="Photo d'identité")
+    photo = models.ImageField(upload_to=photo_upload_path, blank=True, null=True, verbose_name="Photo d'identité")
     
     # Nouveau: Lien vers les parents/tuteurs
     tuteur = models.OneToOneField(Tuteur, on_delete=models.CASCADE, blank=True, null=True, related_name='eleve')
@@ -90,8 +97,6 @@ class Eleve(models.Model):
             super().save(update_fields=["matricule"])
 
         # Créer la structure de dossiers pour l'élève en utilisant son uuid
-        create_eleve_folder_structure(self.classe, self.id)
-    
 
     def get_moyenne_generale(self, trimestre=1, annee=None):
         try:
@@ -148,7 +153,7 @@ class Eleve(models.Model):
     
     def delete(self, *args, **kwargs):
         """Supprime l'élève et son dossier (uuid utilisé pour localiser)."""
-        delete_eleve_folder(self.classe, self.id)
+       
         super().delete(*args, **kwargs)
 
 
@@ -163,21 +168,12 @@ def _document_filename(prefix: str, instance, filename: str) -> str:
     matricule = instance.eleve.matricule or ''
     return f"{prefix}{matricule}.{ext}"
 
-
-def acte_upload_path(instance, filename):
-    return f"inscriptions/{instance.eleve.classe}/{instance.eleve.id}/documents/" + _document_filename('acte_naissance_', instance, filename)
-
-def bulletin_upload_path(instance, filename):
-    return f"inscriptions/{instance.eleve.classe}/{instance.eleve.id}/documents/" + _document_filename('bulletin_', instance, filename)
-
-def diplome_upload_path(instance, filename):
-    return f"inscriptions/{instance.eleve.classe}/{instance.eleve.id}/documents/" + _document_filename('diplome_', instance, filename)
 class DocumentEleve(models.Model):
     eleve = models.ForeignKey(Eleve, on_delete=models.CASCADE, related_name='documents')
 
-    acte_naissance = models.FileField(upload_to=acte_upload_path, null=False, blank=False)
-    last_bulletin = models.FileField(upload_to=bulletin_upload_path, null=False, blank=False)
-    diplome = models.FileField(upload_to=diplome_upload_path, null=False, blank=False)
+    acte_naissance = models.FileField(upload_to='acte_naissance', null=False, blank=False)
+    last_bulletin = models.FileField(upload_to='bulletins', null=False, blank=False)
+    diplome = models.FileField(upload_to='diplomes', null=False, blank=False)
     est_valide = models.BooleanField(default=False)
 
     def __str__(self):
