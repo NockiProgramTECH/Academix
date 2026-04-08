@@ -15,11 +15,11 @@ from tkinter import messagebox
 import mysql.connector 
 
 DB_CONFIG={
-        'host':"localhost",
-        'user':'root',
-        "port":3306,
-        'database':'Academix',
-        'password':'root'
+         'user':  'freedb_h4xgroover',#'root',
+            'password': '9P*H2*Xv8wZU#%U',
+            'host':  ' sql.freedb.tech',#'localhost',
+            'port': '3306',
+            'database':'freedb_academix'
 }
 
 # ══════════════════════════════════════════════════════════════════════════════

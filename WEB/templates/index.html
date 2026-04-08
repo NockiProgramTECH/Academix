@@ -1,84 +1,181 @@
 {% extends 'base.html' %}
 
-{% block title %}Academix - Accueil{% endblock %}
+{% block title %}Academix - Accueil École{% endblock %}
 
 {% block content %}
 <!-- Hero Section -->
-<div class="p-5 mb-5 bg-primary text-white rounded-3">
-    <div class="container-fluid py-5">
-        <h1 class="display-4 fw-bold mb-3">Bienvenue sur Academix</h1>
-        <p class="lead mb-4">Votre plateforme complète de gestion scolaire moderne et intuitive.</p>
-        <div class="d-flex flex-column flex-md-row gap-3 justify-content-center">
-            <a href="/inscriptions/" class="btn btn-success btn-lg">
-                📝 Inscription Élève
-            </a>
-            <a href="/prof/" class="btn btn-warning btn-lg">
-                👨‍🏫 Connexion Professeur
-            </a>
+<section class="hero-section p-5 mb-5 text-white rounded-3">
+    <div class="container py-5">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <h1 class="display-3 fw-bold mb-4 animate-fade-in">Bienvenue à l'École Academix</h1>
+                <p class="lead fs-4 mb-4">Plateforme innovante de gestion scolaire pour une éducation d'excellence. Transformez la gestion de votre établissement avec nos outils modernes et intuitifs.</p>
+                <div class="d-flex flex-column flex-md-row gap-3">
+                    <a href="/inscriptions/" class="btn btn-success btn-lg px-4">
+                        <i class="bi bi-person-plus me-2"></i>Inscription Élève
+                    </a>
+                    <a href="/prof/" class="btn btn-outline-light btn-lg px-4">
+                        <i class="bi bi-person-badge me-2"></i>Professeur
+                    </a>
+                </div>
+            </div>
+            <div class="col-lg-4 text-center">
+                <i class="bi bi-mortarboard-fill display-1 opacity-75"></i>
+            </div>
         </div>
     </div>
-</div>
+</section>
+
+<!-- À propos Section -->
+<section class="py-5 bg-light">
+    <div class="container">
+        <div class="row g-5 align-items-center">
+            <div class="col-lg-6">
+                <h2 class="display-5 fw-bold text-primary mb-4">À propos de notre École</h2>
+                <p class="lead mb-4">Academix est un établissement d'enseignement supérieur dédié à l'excellence académique. Depuis 20 ans, nous formons les leaders de demain avec des méthodes pédagogiques innovantes et un encadrement personnalisé.</p>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-success rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 50px; height: 50px;">
+                                <i class="bi bi-check-lg text-white fs-5"></i>
+                            </div>
+                            <div>
+                                <h6 class="fw-bold">+500 Élèves</h6>
+                                <small class="text-muted">Actuellement inscrits</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-primary rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 50px; height: 50px;">
+                                <i class="bi bi-star-fill text-white fs-5"></i>
+                            </div>
+                            <div>
+                                <h6 class="fw-bold">98% de Satisfaction</h6>
+                                <small class="text-muted">Taux de réussite</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <img src="https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=600&h=400&fit=crop&crop=center" alt="École Academix" class="img-fluid rounded-4 shadow-lg" style="height: 400px; object-fit: cover;">
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Fonctionnalités -->
+<section class="py-5">
+    <div class="container">
+        <div class="text-center mb-5">
+            <h2 class="display-5 fw-bold mb-3">Nos Fonctionnalités</h2>
+            <p class="lead text-muted">Gestion complète de la vie scolaire en un seul endroit</p>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 border-0 shadow-lg hover-lift">
+                    <div class="card-body text-center p-4">
+                        <div class="bg-primary rounded-circle mx-auto mb-4 d-flex align-items-center justify-content-center" style="width: 80px; height: 80px;">
+                            <i class="bi bi-file-earmark-person fs-3 text-white"></i>
+                        </div>
+                        <h5 class="card-title fw-bold">Gestion Inscriptions</h5>
+                        <p class="card-text">Inscription en ligne fluide avec upload documents et suivi administratif automatisé.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 border-0 shadow-lg hover-lift">
+                    <div class="card-body text-center p-4">
+                        <div class="bg-success rounded-circle mx-auto mb-4 d-flex align-items-center justify-content-center" style="width: 80px; height: 80px;">
+                            <i class="bi bi-clipboard-check fs-3 text-white"></i>
+                        </div>
+                        <h5 class="card-title fw-bold">Notes & Évaluations</h5>
+                        <p class="card-text">Saisie notes sécurisée, bulletins automatisés, suivi progrès élèves en temps réel.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 border-0 shadow-lg hover-lift">
+                    <div class="card-body text-center p-4">
+                        <div class="bg-warning rounded-circle mx-auto mb-4 d-flex align-items-center justify-content-center" style="width: 80px; height: 80px;">
+                            <i class="bi bi-cash-coin fs-3 text-white"></i>
+                        </div>
+                        <h5 class="card-title fw-bold">Paiements Scolarité</h5>
+                        <p class="card-text">Gestion paiements, reçus PDF, relances automatiques, reporting financier.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
 
 <!-- Quick Access Cards -->
-<div class="container">
-    <h2 class="text-center mb-5">Accès Rapide</h2>
-    <div class="row g-4">
-        <!-- Student Inscription -->
-        <div class="col-md-6 col-lg-3">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body text-center p-4">
-                    <div class="mb-3">
-                        <i class="bi bi-person-plus-fill fs-1 text-primary"></i>
+<section class="py-5 bg-gradient">
+    <div class="container">
+        <h2 class="text-center text-white mb-5">Accès Rapide</h2>
+        <div class="row g-4 justify-content-center">
+            <div class="col-md-6 col-lg-3">
+                <div class="card h-100 shadow-lg border-0 bg-white">
+                    <div class="card-body text-center p-4">
+                        <i class="bi bi-person-plus-fill fs-1 text-primary mb-3"></i>
+                        <h5>Inscription Élève</h5>
+                        <p class="small">Formulaire complet avec documents</p>
+                        <a href="/inscriptions/" class="btn btn-primary w-100">Commencer</a>
                     </div>
-                    <h5 class="card-title">Inscription Élève</h5>
-                    <p class="card-text">Inscrivez un nouvel élève avec tous les documents requis.</p>
-                    <a href="/inscriptions/" class="btn btn-outline-primary">Commencer</a>
                 </div>
             </div>
-        </div>
-
-        <!-- Prof Login -->
-        <div class="col-md-6 col-lg-3">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body text-center p-4">
-                    <div class="mb-3">
-                        <i class="bi bi-person-badge-fill fs-1 text-warning"></i>
+            <div class="col-md-6 col-lg-3">
+                <div class="card h-100 shadow-lg border-0 bg-white">
+                    <div class="card-body text-center p-4">
+                        <i class="bi bi-person-badge-fill fs-1 text-warning mb-3"></i>
+                        <h5>Professeur</h5>
+                        <p class="small">Espace enseignant sécurisé</p>
+                        <a href="/prof/" class="btn btn-warning w-100">Se connecter</a>
                     </div>
-                    <h5 class="card-title">Professeur</h5>
-                    <p class="card-text">Accédez à votre espace enseignant sécurisé.</p>
-                    <a href="/prof/" class="btn btn-outline-warning">Se connecter</a>
                 </div>
             </div>
-        </div>
-
-        <!-- Parent Register -->
-        <div class="col-md-6 col-lg-3">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body text-center p-4">
-                    <div class="mb-3">
-                        <i class="bi bi-person-plus fs-1 text-success"></i>
+            <div class="col-md-6 col-lg-3">
+                <div class="card h-100 shadow-lg border-0 bg-white">
+                    <div class="card-body text-center p-4">
+                        <i class="bi bi-people fs-1 text-success mb-3"></i>
+                        <h5>Parent</h5>
+                        <p class="small">Suivi scolaire des enfants</p>
+                        <a href="/parents/login/" class="btn btn-success w-100">Connexion</a>
                     </div>
-                    <h5 class="card-title">Inscription Parent</h5>
-                    <p class="card-text">Créez votre compte parent pour suivre vos enfants.</p>
-                    <a href="/parents/inscription/" class="btn btn-outline-success">S'inscrire</a>
                 </div>
             </div>
-        </div>
-
-        <!-- Parent Login -->
-        <div class="col-md-6 col-lg-3">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body text-center p-4">
-                    <div class="mb-3">
-                        <i class="bi bi-box-arrow-in-right fs-1 text-info"></i>
+            <div class="col-md-6 col-lg-3">
+                <div class="card h-100 shadow-lg border-0 bg-white">
+                    <div class="card-body text-center p-4">
+                        <i class="bi bi-gear fs-1 text-info mb-3"></i>
+                        <h5>Administration</h5>
+                        <p class="small">Panneau de gestion complète</p>
+                        <a href="/admin/" class="btn btn-info text-white w-100">Accéder</a>
                     </div>
-                    <h5 class="card-title">Connexion Parent</h5>
-                    <p class="card-text">Connectez-vous pour accéder au portail parents.</p>
-                    <a href="/parents/login/" class="btn btn-outline-info">Se connecter</a>
                 </div>
             </div>
         </div>
     </div>
-</div>
+</section>
+
+<style>
+.animate-fade-in {
+    animation: fadeInUp 1s ease-out;
+}
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.hover-lift {
+    transition: transform 0.3s ease;
+}
+.hover-lift:hover {
+    transform: translateY(-10px);
+}
+.bg-gradient {
+    background: linear-gradient(135deg, var(--primary) 0%, #34495e 100%);
+}
+</style>
 {% endblock %}
     

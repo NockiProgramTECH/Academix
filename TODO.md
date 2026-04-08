@@ -1,2 +1,14 @@
-# Fix TypeError: CTkButton font duplicate\n\n## Steps:\n- [x] 1. Edit DESKTOP/views/eleves.py - remove explicit `font=FONT_LABEL` from search button CTkButton\n- [ ] 2. Test by running `python DESKTOP/acceuil.py` - verify EleveView loads without error\n- [ ] 3. Complete task
+# TODO: Amélioration Design Navbar + Accueil École
 
+## Statut: [ ] En cours
+
+### Étapes logiques:
+1. [x] Créer/Améliorer navbar dans base.html (liens + points connexion)
+2. [ ] Améliorer page d'accueil index.html (présentation école)
+3. [x] Ajouter Bootstrap Icons CDN si manquant
+4. [ ] Tester localement (python manage.py runserver)
+5. [ ] Finaliser
+
+**Prochaine étape: 2/5**
+
+**Prochaine étape: 1/5**

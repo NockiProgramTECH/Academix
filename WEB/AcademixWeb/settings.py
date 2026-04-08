@@ -84,10 +84,10 @@ WSGI_APPLICATION = 'AcademixWeb.wsgi.application'
 DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
-            'NAME': 'Academix',
-            'USER': 'root',
-            'PASSWORD': 'root',
-            'HOST': 'localhost',
+            'NAME': 'freedb_academix',
+            'USER':  'freedb_h4xgroover',#'root',
+            'PASSWORD': '9P*H2*Xv8wZU#%U',
+            'HOST':  'sql.freedb.tech',#'localhost',
             'PORT': '3306',
         }
     }

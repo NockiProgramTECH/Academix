@@ -1,4 +1,6 @@
-tungsten-ui
+
 django
 pillow
 mysqlclient
+PyMuPDF
+customtkinter
