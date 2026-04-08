@@ -108,12 +108,11 @@ WSGI_APPLICATION = 'AcademixWeb.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'defaultdb',
-        'USER': 'avnadmin',
+        'NAME': os.getenv('DB_NAME'),
+        'USER': os.getenv('DB_USER'),
         'PASSWORD': os.getenv('DB_PASSWORD'),
-
-        'HOST': 'mysql-3a624771-lankoandeenock002-62d8.k.aivencloud.com',
-        'PORT': '15910',
+        'HOST': os.getenv('HOST'),
+        'PORT': os.getenv('PORT'),
         'OPTIONS': {
             'ssl': {'ca': None}, # Aiven nécessite souvent SSL, cette option aide à la connexion
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
