@@ -9,6 +9,10 @@ https://docs.djangoproject.com/en/6.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
+import pymysql
+
+pymysql.version_info = (2, 2, 1, "final", 0) # On "ment" à Django sur la version
+pymysql.install_as_MySQLdb()
 
 from pathlib import Path
 
@@ -81,17 +85,32 @@ WSGI_APPLICATION = 'AcademixWeb.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.mysql',
-            'NAME': 'freedb_academix',
-            'USER':  'freedb_h4xgroover',#'root',
-            'PASSWORD': '9P*H2*Xv8wZU#%U',
-            'HOST':  'sql.freedb.tech',#'localhost',
-            'PORT': '3306',
-        }
-    }
+# DATABASES = {
+#         'default': {
+#             'ENGINE': 'django.db.backends.mysql',
+#             'NAME': 'freedb_academix',
+#             'USER':  'freedb_h4xgroover',#'root',
+#             'PASSWORD': '9P*H2*Xv8wZU#%U',
+#             'HOST':  'sql.freedb.tech',#'localhost',
+#             'PORT': '3306',
+#         }
+#     }
 
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'defaultdb',
+        'USER': 'avnadmin',
+        'PASSWORD': 'AVNS_OuXSQCR1L_JIiWk5awC',
+        'HOST': 'mysql-3a624771-lankoandeenock002-62d8.k.aivencloud.com',
+        'PORT': '15910',
+        'OPTIONS': {
+            'ssl': {'ca': None}, # Aiven nécessite souvent SSL, cette option aide à la connexion
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+        },
+    }
+}
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
 
