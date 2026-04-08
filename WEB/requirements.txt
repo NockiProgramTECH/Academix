@@ -6,3 +6,4 @@ PyMuPDF
 customtkinter
 gunicorn
 pymysql
+dotenv

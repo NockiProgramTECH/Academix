@@ -14,6 +14,14 @@ import pymysql
 pymysql.version_info = (2, 2, 1, "final", 0) # On "ment" à Django sur la version
 pymysql.install_as_MySQLdb()
 
+
+
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
+# Dans DATABASES
+
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -102,7 +110,8 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'defaultdb',
         'USER': 'avnadmin',
-        'PASSWORD': 'AVNS_OuXSQCR1L_JIiWk5awC',
+        'PASSWORD': os.getenv('DB_PASSWORD'),
+
         'HOST': 'mysql-3a624771-lankoandeenock002-62d8.k.aivencloud.com',
         'PORT': '15910',
         'OPTIONS': {
