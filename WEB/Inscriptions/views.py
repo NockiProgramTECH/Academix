@@ -270,3 +270,4 @@ def liste_eleves_api(request):
 
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
+    

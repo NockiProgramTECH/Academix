@@ -7,3 +7,6 @@ customtkinter
 gunicorn
 pymysql
 dotenv
+
+cloudinary 
+django-cloudinary-storage

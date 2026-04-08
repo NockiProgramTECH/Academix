@@ -28,7 +28,7 @@ DB_CONFIG = {
     'password': 'AVNS_OuXSQCR1L_JIiWk5awC',
     'host': 'mysql-3a624771-lankoandeenock002-62d8.k.aivencloud.com',
     'port': 15910,
-    'database': 'defaultdb',
+    'database': 'academix',
     # Spécifique à mysql-connector pour forcer le SSL
     'ssl_disabled': False,
     'ssl_ca': None,  # On accepte le certificat sans fournir de fichier local .pem
