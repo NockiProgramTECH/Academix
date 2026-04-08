@@ -14,12 +14,25 @@ from tkinter import messagebox
 
 import mysql.connector 
 
-DB_CONFIG={
-         'user':  'freedb_h4xgroover',#'root',
-            'password': '9P*H2*Xv8wZU#%U',
-            'host':  ' sql.freedb.tech',#'localhost',
-            'port': '3306',
-            'database':'freedb_academix'
+# DB_CONFIG={
+#          'user':  'freedb_h4xgroover',#'root',
+#             'password': '9P*H2*Xv8wZU#%U',
+#             'host':  ' sql.freedb.tech',#'localhost',
+#             'port': '3306',
+#             'database':'freedb_academix'
+# }
+
+
+DB_CONFIG = {
+    'user': 'avnadmin',
+    'password': 'AVNS_OuXSQCR1L_JIiWk5awC',
+    'host': 'mysql-3a624771-lankoandeenock002-62d8.k.aivencloud.com',
+    'port': 15910,
+    'database': 'defaultdb',
+    # Spécifique à mysql-connector pour forcer le SSL
+    'ssl_disabled': False,
+    'ssl_ca': None,  # On accepte le certificat sans fournir de fichier local .pem
+    'use_pure': True # Parfois nécessaire pour éviter des conflits de bibliothèques C
 }
 
 # ══════════════════════════════════════════════════════════════════════════════

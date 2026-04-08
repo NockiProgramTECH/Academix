@@ -111,8 +111,8 @@ DATABASES = {
         'NAME': os.getenv('DB_NAME'),
         'USER': os.getenv('DB_USER'),
         'PASSWORD': os.getenv('DB_PASSWORD'),
-        'HOST': os.getenv('HOST'),
-        'PORT': os.getenv('PORT'),
+        'HOST': os.getenv('DB_HOST'),
+        'PORT': os.getenv('DB_PORT'),
         'OPTIONS': {
             'ssl': {'ca': None}, # Aiven nécessite souvent SSL, cette option aide à la connexion
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
